@@ -1,6 +1,6 @@
 # GroveSTARK
 
-Zero‑knowledge STARK proofs for Dash Platform GroveDB: prove you own a document in a specific contract and state root — without revealing identity, document contents, Merkle paths, or private keys.
+Zero‑knowledge STARK proofs for Dash Platform GroveDB: prove you own a document in a specific contract at a specific block height — without revealing identity or document contents.
 
 **WARNING:** This is a research project. It has not been audited and may contain bugs and security flaws. This implementation is NOT ready for production use.
 
