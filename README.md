@@ -111,6 +111,14 @@ You can generate proofs for multiple witnesses and receive a `BatchProof` with a
 - `prover/` — proof generation (Winterfell 0.13.1), batch helper.
 - `utils/` — helper functions.
 
+## Further Reading
+
+- docs/TECH_OVERVIEW.md — trace, constraints, and phase design
+- docs/STACK.md — dependencies, features, and env vars
+- docs/WITNESS_AND_PUBLIC_INPUTS.md — data model and validation
+- docs/GROVEDB_PROOFS.md — GroveDB proof parsing/binding
+- docs/DEVELOPMENT.md — parameters, features, logging, and testing
+
 ## Testing
 
 Common commands:
