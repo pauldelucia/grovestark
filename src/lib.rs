@@ -59,7 +59,6 @@ pub use crypto::ed25519::{
 // Ed25519 helpers for Dash Evo Tool integration
 pub use ed25519_helpers::{
     compressed_to_extended, compute_eddsa_hash_h, create_witness_from_platform_proofs,
-    create_witness_from_raw_data, create_witness_with_conversion,
     populate_witness_with_extended,
 };
 
@@ -68,6 +67,4 @@ pub use ed25519_helpers::{
 pub use ed25519_helpers::create_witness_from_platform_proofs_no_validation;
 
 // GroveDB proof parsing for Dash Evo Tool integration
-pub use parser::{
-    parse_grovedb_proof, parse_raw_merk_proof, GroveDBParser,
-};
+pub use parser::{parse_grovedb_proof, parse_raw_merk_proof, GroveDBParser};

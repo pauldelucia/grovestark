@@ -142,7 +142,7 @@ fn test_proof_with_real_state_root() {
     };
 
     // Augment EdDSA witness
-    let witness = augment_eddsa_witness(&witness, &public_inputs).expect("Failed to augment EdDSA");
+    let witness = augment_eddsa_witness(&witness).expect("Failed to augment EdDSA");
 
     // Configure prover for fast testing
     let mut config = STARKConfig::default();

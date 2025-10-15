@@ -165,8 +165,7 @@ fn create_det_witness() -> PrivateInputs {
     );
 
     // Augment with scalar decomposition
-    let public_inputs = create_det_public_inputs();
-    augment_eddsa_witness(&witness, &public_inputs).expect("Failed to augment EdDSA witness")
+    augment_eddsa_witness(&witness).expect("Failed to augment EdDSA witness")
 }
 
 fn create_det_public_inputs() -> PublicInputs {

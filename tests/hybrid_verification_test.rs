@@ -1,8 +1,6 @@
-use grovestark::crypto::hybrid_verification::{
-    DisclosureLevel, HybridProof, HybridVerifier, PrivacyLevel, PublicView,
-};
+use grovestark::crypto::hybrid_verification::{DisclosureLevel, HybridVerifier, PrivacyLevel};
 use grovestark::test_utils::create_valid_eddsa_witness;
-use grovestark::types::{MerkleNode, PrivateInputs, PublicInputs};
+use grovestark::types::{PrivateInputs, PublicInputs};
 
 /// Helper to create witness with valid EdDSA and custom document
 fn create_witness_with_document(document_cbor: Vec<u8>) -> PrivateInputs {

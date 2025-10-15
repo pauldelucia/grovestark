@@ -139,7 +139,7 @@ fn generate_test_witness() -> (PrivateInputs, PublicInputs) {
 
     // Augment with scalar decomposition and other fields
     let augmented_witness =
-        augment_eddsa_witness(&witness, &public).expect("Failed to augment EdDSA witness");
+        augment_eddsa_witness(&witness).expect("Failed to augment EdDSA witness");
 
     (augmented_witness, public)
 }

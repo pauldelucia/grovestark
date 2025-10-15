@@ -96,12 +96,5 @@ pub fn create_valid_eddsa_witness_with_decompression() -> PrivateInputs {
         &mut witness.a_extended_t,
     );
 
-    // Augment with scalar decomposition
-    let public_inputs = PublicInputs {
-        state_root: [0u8; 32],
-        contract_id: [0u8; 32],
-        message_hash: [0u8; 32],
-        timestamp: 0,
-    };
-    augment_eddsa_witness(&witness, &public_inputs).expect("Failed to augment witness")
+    augment_eddsa_witness(&witness).expect("Failed to augment witness")
 }

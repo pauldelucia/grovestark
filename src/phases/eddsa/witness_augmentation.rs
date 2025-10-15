@@ -6,14 +6,11 @@
 use crate::crypto::scalar_mult::FixedBaseTable;
 use crate::error::Result;
 use crate::phases::eddsa::scalar_range::compute_scalar_borrow_chain;
-use crate::types::{PrivateInputs, PublicInputs};
+use crate::types::PrivateInputs;
 
 /// Augment EdDSA witness with computed intermediate values
 /// This is the researcher's requirement #9 - witness augmentation for EdDSA
-pub fn augment_eddsa_witness(
-    base: &PrivateInputs,
-    _public_inputs: &PublicInputs,
-) -> Result<PrivateInputs> {
+pub fn augment_eddsa_witness(base: &PrivateInputs) -> Result<PrivateInputs> {
     let mut augmented = base.clone();
 
     // 1. Decompose scalars s and h into 4-bit windows (64 windows each)
@@ -133,14 +130,7 @@ pub fn create_placeholder_eddsa_witness() -> Result<PrivateInputs> {
     base_witness.keys_root = [0x55; 32];
     base_witness.private_key = [6u8; 32];
 
-    let public_inputs = PublicInputs {
-        state_root: [0u8; 32],
-        contract_id: [0u8; 32],
-        message_hash: [0u8; 32],
-        timestamp: 0,
-    };
-
-    augment_eddsa_witness(&base_witness, &public_inputs)
+    augment_eddsa_witness(&base_witness)
 }
 
 /// Convert 32-byte array to 16 limbs of 16-bit values
@@ -238,14 +228,7 @@ mod tests {
     #[test]
     fn test_scalar_range_augmentation() {
         let base_witness = PrivateInputs::default();
-        let public_inputs = PublicInputs {
-            state_root: [0u8; 32],
-            contract_id: [0u8; 32],
-            message_hash: [0u8; 32],
-            timestamp: 0,
-        };
-
-        let augmented = augment_eddsa_witness(&base_witness, &public_inputs).unwrap();
+        let augmented = augment_eddsa_witness(&base_witness).unwrap();
 
         // Range check auxiliary values should be computed
         // For default witness (all zeros), range check should show s < L

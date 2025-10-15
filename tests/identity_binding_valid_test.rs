@@ -98,8 +98,8 @@ fn test_valid_proof_with_matching_ids() {
         timestamp: 1699999999,
     };
 
-    let final_witness = augment_eddsa_witness(&augmented_witness, &public_inputs)
-        .expect("Failed to augment EdDSA witness");
+    let final_witness =
+        augment_eddsa_witness(&augmented_witness).expect("Failed to augment EdDSA witness");
 
     // Create prover with test config
     let mut config = STARKConfig::default();

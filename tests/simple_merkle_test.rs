@@ -180,8 +180,7 @@ fn test_simple_merkle_path() {
     );
 
     // Augment with scalar decomposition
-    let witness =
-        augment_eddsa_witness(&witness, &public_inputs).expect("Failed to augment EdDSA witness");
+    let witness = augment_eddsa_witness(&witness).expect("Failed to augment EdDSA witness");
 
     // Configure prover
     let mut config = STARKConfig::default();
