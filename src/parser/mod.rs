@@ -400,7 +400,8 @@ pub fn parse_sdk_grovedb_proof(encoded_proof: &[u8]) -> Result<Vec<MerkleNode>> 
     // Find the anchor sequence 0x02 0x01 0x20 which marks start of the first push after a parent.
     let mut start = None;
     while i + 2 < encoded_proof.len() {
-        if encoded_proof[i] == 0x02 && encoded_proof[i + 1] == 0x01 && encoded_proof[i + 2] == 0x20 {
+        if encoded_proof[i] == 0x02 && encoded_proof[i + 1] == 0x01 && encoded_proof[i + 2] == 0x20
+        {
             start = Some(i);
             break;
         }
@@ -417,7 +418,8 @@ pub fn parse_sdk_grovedb_proof(encoded_proof: &[u8]) -> Result<Vec<MerkleNode>> 
             i += 1;
         }
     }
-    let mut idx = start.ok_or_else(|| Error::Parser("Could not locate SDK merk ops start".into()))?;
+    let mut idx =
+        start.ok_or_else(|| Error::Parser("Could not locate SDK merk ops start".into()))?;
 
     let mut nodes = Vec::new();
     let end = encoded_proof.len();
@@ -429,7 +431,10 @@ pub fn parse_sdk_grovedb_proof(encoded_proof: &[u8]) -> Result<Vec<MerkleNode>> 
                 if idx + 34 <= end && encoded_proof[idx + 1] == 0x20 {
                     let mut h = [0u8; 32];
                     h.copy_from_slice(&encoded_proof[idx + 2..idx + 34]);
-                    nodes.push(MerkleNode { hash: h, is_left: false });
+                    nodes.push(MerkleNode {
+                        hash: h,
+                        is_left: false,
+                    });
                     idx += 34;
                 } else {
                     // Not enough bytes or unexpected length marker; stop

@@ -8,16 +8,41 @@ fn test_preflight_checker() {
 
     // Load unified PASS_AND_FAIL fixtures instead of constructing ad-hoc inputs
     #[derive(serde::Deserialize)]
-    struct Ed25519Fix { public_key_hex: String, signature_r_hex: String, signature_s_hex: String, private_key_hex: String }
+    struct Ed25519Fix {
+        public_key_hex: String,
+        signature_r_hex: String,
+        signature_s_hex: String,
+        private_key_hex: String,
+    }
     #[derive(serde::Deserialize)]
-    struct PubInputsFix { state_root_hex: String, contract_id_hex: String, message_hex: String, timestamp: u64 }
+    struct PubInputsFix {
+        state_root_hex: String,
+        contract_id_hex: String,
+        message_hex: String,
+        timestamp: u64,
+    }
     #[derive(serde::Deserialize)]
-    struct PassFix { document_json: String, document_proof_hex: String, key_proof_hex: String, public_inputs: PubInputsFix, ed25519: Ed25519Fix }
+    struct PassFix {
+        document_json: String,
+        document_proof_hex: String,
+        key_proof_hex: String,
+        public_inputs: PubInputsFix,
+        ed25519: Ed25519Fix,
+    }
     #[derive(serde::Deserialize)]
-    struct Fixtures { pass: PassFix }
-    fn hex32(s: &str) -> [u8; 32] { let v = hex::decode(s).unwrap(); let mut out=[0u8;32]; out.copy_from_slice(&v); out }
-    let fixtures: Fixtures = serde_json::from_str(include_str!("fixtures/PASS_AND_FAIL.json")).unwrap();
-    let document_proof = hex::decode(&fixtures.pass.document_proof_hex).expect("decode document proof");
+    struct Fixtures {
+        pass: PassFix,
+    }
+    fn hex32(s: &str) -> [u8; 32] {
+        let v = hex::decode(s).unwrap();
+        let mut out = [0u8; 32];
+        out.copy_from_slice(&v);
+        out
+    }
+    let fixtures: Fixtures =
+        serde_json::from_str(include_str!("fixtures/PASS_AND_FAIL.json")).unwrap();
+    let document_proof =
+        hex::decode(&fixtures.pass.document_proof_hex).expect("decode document proof");
     let key_proof = hex::decode(&fixtures.pass.key_proof_hex).expect("decode key proof");
     let public_key = hex32(&fixtures.pass.ed25519.public_key_hex);
     let signature_r = hex32(&fixtures.pass.ed25519.signature_r_hex);

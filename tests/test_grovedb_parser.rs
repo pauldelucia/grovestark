@@ -3,10 +3,15 @@ use hex;
 
 fn load_fixture_doc_proof() -> Vec<u8> {
     #[derive(serde::Deserialize)]
-    struct Fixtures { pass: PassFix }
+    struct Fixtures {
+        pass: PassFix,
+    }
     #[derive(serde::Deserialize)]
-    struct PassFix { document_proof_hex: String }
-    let fixtures: Fixtures = serde_json::from_str(include_str!("fixtures/PASS_AND_FAIL.json")).unwrap();
+    struct PassFix {
+        document_proof_hex: String,
+    }
+    let fixtures: Fixtures =
+        serde_json::from_str(include_str!("fixtures/PASS_AND_FAIL.json")).unwrap();
     hex::decode(&fixtures.pass.document_proof_hex).expect("decode document proof")
 }
 

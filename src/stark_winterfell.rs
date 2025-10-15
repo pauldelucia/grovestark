@@ -449,11 +449,7 @@ impl GroveAir {
 
     /// CE-parity probe for debugging (GUIDANCE.md Section C)
     #[allow(dead_code)]
-    fn ce_parity_probe<E: FieldElement>(
-        &self,
-        _where: &str,
-        _vec: &[E],
-    ) {
+    fn ce_parity_probe<E: FieldElement>(&self, _where: &str, _vec: &[E]) {
         // Only active with wf_dbg feature
         #[cfg(feature = "wf_dbg")]
         {
@@ -629,7 +625,10 @@ impl Air for GroveAir {
         for k in 0..16 {
             let c = MERKLE_MSG.col(k);
             assert!(c != 63, "MERKLE_MSG mapping must skip IS_LEFT (63)");
-            assert!((55..=71).contains(&c), "MERKLE_MSG must be in scratch range");
+            assert!(
+                (55..=71).contains(&c),
+                "MERKLE_MSG must be in scratch range"
+            );
         }
 
         // Set minimal exemptions for next()-based constraints; keep at 1 to maximize divisor degree
@@ -1701,39 +1700,39 @@ impl Air for GroveAir {
         static EVAL_COUNT: AtomicUsize = AtomicUsize::new(0);
         let eval_num = EVAL_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
         if eval_num <= 3 {
-                eprintln!(
-                    "[GroveVM/AUX] Evaluation #{}: {} constraints",
-                    eval_num, NUM_AUX_CONSTRAINTS
-                );
-                eprintln!(
-                    "  GroveVM columns start at: {}, total aux cols: {}",
-                    grovevm_start,
-                    aux_current.len()
-                );
-                eprintln!("  GroveVM expects {} columns", GROVEVM_AUX_WIDTH);
-                eprintln!("  Result buffer length: {}", result.len());
-                // Check first few constraint values
-                for (i, val) in grovevm_results.iter().take(3).enumerate() {
-                    // We can't print the value directly but we can check if it's zero
-                    let is_zero = *val == E::ZERO;
-                    eprintln!("  Constraint[{}] is_zero: {}", i, is_zero);
+            eprintln!(
+                "[GroveVM/AUX] Evaluation #{}: {} constraints",
+                eval_num, NUM_AUX_CONSTRAINTS
+            );
+            eprintln!(
+                "  GroveVM columns start at: {}, total aux cols: {}",
+                grovevm_start,
+                aux_current.len()
+            );
+            eprintln!("  GroveVM expects {} columns", GROVEVM_AUX_WIDTH);
+            eprintln!("  Result buffer length: {}", result.len());
+            // Check first few constraint values
+            for (i, val) in grovevm_results.iter().take(3).enumerate() {
+                // We can't print the value directly but we can check if it's zero
+                let is_zero = *val == E::ZERO;
+                eprintln!("  Constraint[{}] is_zero: {}", i, is_zero);
+            }
+            // Check the actual column values
+            if grovevm_current.len() >= 6 {
+                eprintln!("  First GroveVM columns:");
+                for i in 0..6 {
+                    let is_one = grovevm_current[i] == E::ONE;
+                    let is_zero = grovevm_current[i] == E::ZERO;
+                    eprintln!("    Col[{}]: is_one={}, is_zero={}", i, is_one, is_zero);
                 }
-                // Check the actual column values
-                if grovevm_current.len() >= 6 {
-                    eprintln!("  First GroveVM columns:");
-                    for i in 0..6 {
-                        let is_one = grovevm_current[i] == E::ONE;
-                        let is_zero = grovevm_current[i] == E::ZERO;
-                        eprintln!("    Col[{}]: is_one={}, is_zero={}", i, is_one, is_zero);
-                    }
-                    // Debug: Try to see what constraint 0 actually evaluates to
-                    let op_ph = grovevm_current[0];
-                    let constraint_0 = op_ph * (op_ph - E::ONE);
-                    eprintln!(
-                        "    op_ph * (op_ph - 1) is_zero: {}",
-                        constraint_0 == E::ZERO
-                    );
-                }
+                // Debug: Try to see what constraint 0 actually evaluates to
+                let op_ph = grovevm_current[0];
+                let constraint_0 = op_ph * (op_ph - E::ONE);
+                eprintln!(
+                    "    op_ph * (op_ph - 1) is_zero: {}",
+                    constraint_0 == E::ZERO
+                );
+            }
         }
 
         // Optional debug hash per GUIDANCE.md

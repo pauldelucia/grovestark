@@ -128,7 +128,11 @@ pub fn apply_join_constraints(
         if i < constraints.len() {
             // Gate the constraint: (selector - expected) * constraint = 0
             // This ensures constraint is only active when selector matches
-            let gated = if selector != 0 { *join_constraint } else { BaseElement::new(0) };
+            let gated = if selector != 0 {
+                *join_constraint
+            } else {
+                BaseElement::new(0)
+            };
             constraints[i] += gated;
         }
     }

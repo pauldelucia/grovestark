@@ -13,9 +13,8 @@ fn test_grovevm_with_real_proof() {
     println!("Document proof size: {} bytes", doc_proof.len());
 
     // Parse the proof
-    let (ops, tape) =
-        GroveVMTraceBuilder::parse_grovevm_ops_from_proof(&doc_proof)
-            .expect("Failed to parse proof");
+    let (ops, tape) = GroveVMTraceBuilder::parse_grovevm_ops_from_proof(&doc_proof)
+        .expect("Failed to parse proof");
 
     println!("Parsed {} operations:", ops.len());
     for (i, op) in ops.iter().enumerate() {
@@ -74,9 +73,8 @@ fn test_grovevm_with_key_proof() {
     println!("Key proof size: {} bytes", key_proof.len());
 
     // Parse the proof
-    let (ops, tape) =
-        GroveVMTraceBuilder::parse_grovevm_ops_from_proof(&key_proof)
-            .expect("Failed to parse proof");
+    let (ops, tape) = GroveVMTraceBuilder::parse_grovevm_ops_from_proof(&key_proof)
+        .expect("Failed to parse proof");
 
     println!("Parsed {} operations:", ops.len());
     for (i, op) in ops.iter().enumerate() {

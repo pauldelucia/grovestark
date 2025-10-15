@@ -1,35 +1,59 @@
 // Test generating actual ZK proofs using real SDK proof data from Dash Platform
 use grovestark::{
-    create_witness_from_platform_proofs,
+    create_witness_from_platform_proofs, parse_grovedb_proof,
     types::{PublicInputs, STARKConfig},
-    GroveSTARK, parse_grovedb_proof,
+    GroveSTARK,
 };
 use std::fs;
 
 // Helper: load PASS_AND_FAIL fixtures
 fn load_pass_fixture() -> (
-    Vec<u8>,           // document_proof
-    Vec<u8>,           // key_proof
-    Vec<u8>,           // document_json bytes
-    [u8; 32],          // pubkey
-    [u8; 32],          // sig_r
-    [u8; 32],          // sig_s
-    Vec<u8>,           // message bytes
-    [u8; 32],          // private_key
-    PublicInputs,      // public inputs
+    Vec<u8>,      // document_proof
+    Vec<u8>,      // key_proof
+    Vec<u8>,      // document_json bytes
+    [u8; 32],     // pubkey
+    [u8; 32],     // sig_r
+    [u8; 32],     // sig_s
+    Vec<u8>,      // message bytes
+    [u8; 32],     // private_key
+    PublicInputs, // public inputs
 ) {
     #[derive(serde::Deserialize)]
-    struct Ed25519Fix { public_key_hex: String, signature_r_hex: String, signature_s_hex: String, private_key_hex: String }
+    struct Ed25519Fix {
+        public_key_hex: String,
+        signature_r_hex: String,
+        signature_s_hex: String,
+        private_key_hex: String,
+    }
     #[derive(serde::Deserialize)]
-    struct PubInputsFix { state_root_hex: String, contract_id_hex: String, message_hex: String, timestamp: u64 }
+    struct PubInputsFix {
+        state_root_hex: String,
+        contract_id_hex: String,
+        message_hex: String,
+        timestamp: u64,
+    }
     #[derive(serde::Deserialize)]
-    struct PassFix { document_json: String, document_proof_hex: String, key_proof_hex: String, public_inputs: PubInputsFix, ed25519: Ed25519Fix }
+    struct PassFix {
+        document_json: String,
+        document_proof_hex: String,
+        key_proof_hex: String,
+        public_inputs: PubInputsFix,
+        ed25519: Ed25519Fix,
+    }
     #[derive(serde::Deserialize)]
-    struct Fixtures { pass: PassFix }
+    struct Fixtures {
+        pass: PassFix,
+    }
 
-    fn hex32(s: &str) -> [u8; 32] { let v = hex::decode(s).unwrap(); let mut out=[0u8;32]; out.copy_from_slice(&v); out }
+    fn hex32(s: &str) -> [u8; 32] {
+        let v = hex::decode(s).unwrap();
+        let mut out = [0u8; 32];
+        out.copy_from_slice(&v);
+        out
+    }
 
-    let fixtures: Fixtures = serde_json::from_str(include_str!("fixtures/PASS_AND_FAIL.json")).unwrap();
+    let fixtures: Fixtures =
+        serde_json::from_str(include_str!("fixtures/PASS_AND_FAIL.json")).unwrap();
     let document_proof = hex::decode(&fixtures.pass.document_proof_hex).unwrap();
     let key_proof = hex::decode(&fixtures.pass.key_proof_hex).unwrap();
     let pubkey = hex32(&fixtures.pass.ed25519.public_key_hex);
@@ -57,14 +81,26 @@ fn load_pass_fixture() -> (
     )
 }
 
-#[cfg_attr(debug_assertions, ignore = "Runs only in release mode; heavy + strict constraints")]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "Runs only in release mode; heavy + strict constraints"
+)]
 #[test]
 fn test_generate_zk_proof_with_real_data() {
     println!("\n=== Testing ZK Proof Generation with Real SDK Data ===\n");
 
     // Load real proof bytes and inputs from fixtures
-    let (doc_proof, id_proof, document_json, pubkey, sig_r, sig_s, message, private_key, public_inputs) =
-        load_pass_fixture();
+    let (
+        doc_proof,
+        id_proof,
+        document_json,
+        pubkey,
+        sig_r,
+        sig_s,
+        message,
+        private_key,
+        public_inputs,
+    ) = load_pass_fixture();
 
     println!("✅ Loaded real proof fixtures:");
     println!("   Document proof: {} bytes", doc_proof.len());
@@ -125,8 +161,8 @@ fn test_generate_zk_proof_with_real_data() {
         folding_factor: 4,
         max_remainder_degree: 255, // 2^8 - 1
         grinding_bits: 8,
-        trace_length: 65536,     // Required for all phases
-        num_trace_columns: 104,  // Must match production
+        trace_length: 65536,    // Required for all phases
+        num_trace_columns: 104, // Must match production
         security_level: 96,
     };
 
@@ -184,14 +220,26 @@ fn test_generate_zk_proof_with_real_data() {
     println!("\n🎉 Successfully generated and verified a ZK proof using real SDK data!");
 }
 
-#[cfg_attr(debug_assertions, ignore = "Runs only in release mode; heavy + strict constraints")]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "Runs only in release mode; heavy + strict constraints"
+)]
 #[test]
 fn test_parse_and_use_real_merkle_paths() {
     println!("\n=== Testing Merkle Path Extraction from Real Data ===\n");
 
     // Load and parse the real proofs
-    let (doc_proof, id_proof, document_json, pubkey, sig_r, sig_s, message, private_key, public_inputs) =
-        load_pass_fixture();
+    let (
+        doc_proof,
+        id_proof,
+        document_json,
+        pubkey,
+        sig_r,
+        sig_s,
+        message,
+        private_key,
+        public_inputs,
+    ) = load_pass_fixture();
 
     // Parse the Merkle paths
     let doc_nodes = parse_grovedb_proof(&doc_proof).expect("Failed to parse document proof");
@@ -249,8 +297,8 @@ fn test_parse_and_use_real_merkle_paths() {
         folding_factor: 4,
         max_remainder_degree: 255, // Must be 2^n - 1
         grinding_bits: 8,
-        trace_length: 65536,       // Required for all phases
-        num_trace_columns: 104,    // Must match production
+        trace_length: 65536,    // Required for all phases
+        num_trace_columns: 104, // Must match production
         security_level: 96,
     };
 
@@ -276,7 +324,10 @@ fn test_parse_and_use_real_merkle_paths() {
     println!("✅ Proof verification successful!");
 }
 
-#[cfg_attr(debug_assertions, ignore = "Runs only in release mode; heavy + strict constraints")]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "Runs only in release mode; heavy + strict constraints"
+)]
 #[test]
 fn test_zk_proof_with_metadata() {
     println!("\n=== Testing ZK Proof with Metadata from Real Data ===\n");
@@ -298,8 +349,17 @@ fn test_zk_proof_with_metadata() {
     println!("   Security level extracted: {}", security_level);
 
     // Load the actual proof files and inputs from fixtures
-    let (doc_proof, id_proof, document_json, pubkey, sig_r, sig_s, message, private_key, public_inputs) =
-        load_pass_fixture();
+    let (
+        doc_proof,
+        id_proof,
+        document_json,
+        pubkey,
+        sig_r,
+        sig_s,
+        message,
+        private_key,
+        public_inputs,
+    ) = load_pass_fixture();
 
     // Security level already extracted above
 
@@ -330,8 +390,8 @@ fn test_zk_proof_with_metadata() {
         folding_factor: 4,
         max_remainder_degree: 255, // 2^8 - 1
         grinding_bits: 8,
-        trace_length: 65536,     // Required for all phases
-        num_trace_columns: 104,  // Must match production
+        trace_length: 65536,    // Required for all phases
+        num_trace_columns: 104, // Must match production
         security_level: 96,
     };
 

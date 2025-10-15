@@ -5,29 +5,58 @@ use std::fs;
 // Minimal SDK-proof parser used only in this test module.
 // Skips [len(2)][root(32)] and scans for hash-carrying ops.
 fn parse_sdk_grovedb_proof(bytes: &[u8]) -> Result<Vec<MerkleNode>, String> {
-    if bytes.len() < 34 { return Err("too short".into()); }
+    if bytes.len() < 34 {
+        return Err("too short".into());
+    }
     let mut i = 34;
     let end = bytes.len();
     // find anchor 0x02 0x01 0x20 or fall back to first 0x01 0x20
     let mut start = None;
-    while i + 2 < end { if bytes[i]==0x02 && bytes[i+1]==0x01 && bytes[i+2]==0x20 { start=Some(i); break;} i+=1; }
-    if start.is_none() { i=34; while i+1<end { if bytes[i]==0x01 && bytes[i+1]==0x20 { start=Some(i); break;} i+=1; } }
-    let mut idx = start.ok_or_else(||"no ops start".to_string())?;
+    while i + 2 < end {
+        if bytes[i] == 0x02 && bytes[i + 1] == 0x01 && bytes[i + 2] == 0x20 {
+            start = Some(i);
+            break;
+        }
+        i += 1;
+    }
+    if start.is_none() {
+        i = 34;
+        while i + 1 < end {
+            if bytes[i] == 0x01 && bytes[i + 1] == 0x20 {
+                start = Some(i);
+                break;
+            }
+            i += 1;
+        }
+    }
+    let mut idx = start.ok_or_else(|| "no ops start".to_string())?;
     let mut nodes = Vec::new();
     while idx < end && nodes.len() < 4096 {
         match bytes[idx] {
             0x01 | 0x03 | 0x04 | 0x10 | 0x11 => {
-                if idx + 34 <= end && bytes[idx+1]==0x20 {
-                    let mut h=[0u8;32]; h.copy_from_slice(&bytes[idx+2..idx+34]);
-                    nodes.push(MerkleNode{hash:h,is_left:false});
-                    idx+=34;
-                } else { break; }
+                if idx + 34 <= end && bytes[idx + 1] == 0x20 {
+                    let mut h = [0u8; 32];
+                    h.copy_from_slice(&bytes[idx + 2..idx + 34]);
+                    nodes.push(MerkleNode {
+                        hash: h,
+                        is_left: false,
+                    });
+                    idx += 34;
+                } else {
+                    break;
+                }
             }
-            0x02 => { idx+=1; }
-            _ => { idx+=1; }
+            0x02 => {
+                idx += 1;
+            }
+            _ => {
+                idx += 1;
+            }
         }
     }
-    if nodes.is_empty() { return Err("no nodes".into()); }
+    if nodes.is_empty() {
+        return Err("no nodes".into());
+    }
     Ok(nodes)
 }
 

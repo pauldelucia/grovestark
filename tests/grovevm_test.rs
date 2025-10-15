@@ -153,10 +153,9 @@ fn test_grovevm_stack_depth() {
     proof_bytes_overflow.push(0x01); // One more PushHash
     proof_bytes_overflow.extend_from_slice(&[0xFF; 32]);
 
-    let (ops_overflow, tape_overflow) = GroveVMTraceBuilder::parse_grovevm_ops_from_proof(
-        &proof_bytes_overflow,
-    )
-    .expect("Failed to parse proof");
+    let (ops_overflow, tape_overflow) =
+        GroveVMTraceBuilder::parse_grovevm_ops_from_proof(&proof_bytes_overflow)
+            .expect("Failed to parse proof");
 
     assert_eq!(ops_overflow.len(), D_MAX + 1);
 

@@ -141,42 +141,62 @@ fn decode_op(input: &mut Cursor<&[u8]>) -> Result<Op> {
         0x06 => {
             // Op::Push(Node::KVRefValueHash) - treat similarly to KVValueHash for now
             let mut key_len_byte = [0u8; 1];
-            input.read_exact(&mut key_len_byte).map_err(|e| Error::Parser(format!("Failed to read key length: {}", e)))?;
+            input
+                .read_exact(&mut key_len_byte)
+                .map_err(|e| Error::Parser(format!("Failed to read key length: {}", e)))?;
             let key_len = key_len_byte[0] as usize;
 
             let mut key = vec![0u8; key_len];
-            input.read_exact(&mut key).map_err(|e| Error::Parser(format!("Failed to read key: {}", e)))?;
+            input
+                .read_exact(&mut key)
+                .map_err(|e| Error::Parser(format!("Failed to read key: {}", e)))?;
 
             let mut value_len_bytes = [0u8; 2];
-            input.read_exact(&mut value_len_bytes).map_err(|e| Error::Parser(format!("Failed to read value length: {}", e)))?;
+            input
+                .read_exact(&mut value_len_bytes)
+                .map_err(|e| Error::Parser(format!("Failed to read value length: {}", e)))?;
             let value_len = u16::from_be_bytes(value_len_bytes) as usize;
 
             let mut value = vec![0u8; value_len];
-            input.read_exact(&mut value).map_err(|e| Error::Parser(format!("Failed to read value: {}", e)))?;
+            input
+                .read_exact(&mut value)
+                .map_err(|e| Error::Parser(format!("Failed to read value: {}", e)))?;
 
             let mut value_hash = [0u8; 32];
-            input.read_exact(&mut value_hash).map_err(|e| Error::Parser(format!("Failed to read value hash: {}", e)))?;
+            input
+                .read_exact(&mut value_hash)
+                .map_err(|e| Error::Parser(format!("Failed to read value hash: {}", e)))?;
 
             Ok(Op::Push(Node::KVValueHash(key, value, value_hash)))
         }
         0x07 => {
             // Op::Push(Node::KVValueHashFeatureType) - ignore feature_type, treat like KVValueHash
             let mut key_len_byte = [0u8; 1];
-            input.read_exact(&mut key_len_byte).map_err(|e| Error::Parser(format!("Failed to read key length: {}", e)))?;
+            input
+                .read_exact(&mut key_len_byte)
+                .map_err(|e| Error::Parser(format!("Failed to read key length: {}", e)))?;
             let key_len = key_len_byte[0] as usize;
 
             let mut key = vec![0u8; key_len];
-            input.read_exact(&mut key).map_err(|e| Error::Parser(format!("Failed to read key: {}", e)))?;
+            input
+                .read_exact(&mut key)
+                .map_err(|e| Error::Parser(format!("Failed to read key: {}", e)))?;
 
             let mut value_len_bytes = [0u8; 2];
-            input.read_exact(&mut value_len_bytes).map_err(|e| Error::Parser(format!("Failed to read value length: {}", e)))?;
+            input
+                .read_exact(&mut value_len_bytes)
+                .map_err(|e| Error::Parser(format!("Failed to read value length: {}", e)))?;
             let value_len = u16::from_be_bytes(value_len_bytes) as usize;
 
             let mut value = vec![0u8; value_len];
-            input.read_exact(&mut value).map_err(|e| Error::Parser(format!("Failed to read value: {}", e)))?;
+            input
+                .read_exact(&mut value)
+                .map_err(|e| Error::Parser(format!("Failed to read value: {}", e)))?;
 
             let mut value_hash = [0u8; 32];
-            input.read_exact(&mut value_hash).map_err(|e| Error::Parser(format!("Failed to read value hash: {}", e)))?;
+            input
+                .read_exact(&mut value_hash)
+                .map_err(|e| Error::Parser(format!("Failed to read value hash: {}", e)))?;
 
             // feature_type byte (ignore for now)
             let mut _feature = [0u8; 1];
@@ -187,82 +207,130 @@ fn decode_op(input: &mut Cursor<&[u8]>) -> Result<Op> {
         // Inverted push variants 0x08..0x0e mirror 0x01..0x07
         0x08 => {
             let mut hash = [0u8; 32];
-            input.read_exact(&mut hash).map_err(|e| Error::Parser(format!("Failed to read hash: {}", e)))?;
+            input
+                .read_exact(&mut hash)
+                .map_err(|e| Error::Parser(format!("Failed to read hash: {}", e)))?;
             Ok(Op::PushInverted(Node::Hash(hash)))
         }
         0x09 => {
             let mut hash = [0u8; 32];
-            input.read_exact(&mut hash).map_err(|e| Error::Parser(format!("Failed to read KV hash: {}", e)))?;
+            input
+                .read_exact(&mut hash)
+                .map_err(|e| Error::Parser(format!("Failed to read KV hash: {}", e)))?;
             Ok(Op::PushInverted(Node::KVHash(hash)))
         }
         0x0a => {
             let mut key_len_byte = [0u8; 1];
-            input.read_exact(&mut key_len_byte).map_err(|e| Error::Parser(format!("Failed to read key length: {}", e)))?;
+            input
+                .read_exact(&mut key_len_byte)
+                .map_err(|e| Error::Parser(format!("Failed to read key length: {}", e)))?;
             let key_len = key_len_byte[0] as usize;
             let mut key = vec![0u8; key_len];
-            input.read_exact(&mut key).map_err(|e| Error::Parser(format!("Failed to read key: {}", e)))?;
+            input
+                .read_exact(&mut key)
+                .map_err(|e| Error::Parser(format!("Failed to read key: {}", e)))?;
             let mut value_len_bytes = [0u8; 2];
-            input.read_exact(&mut value_len_bytes).map_err(|e| Error::Parser(format!("Failed to read value length: {}", e)))?;
+            input
+                .read_exact(&mut value_len_bytes)
+                .map_err(|e| Error::Parser(format!("Failed to read value length: {}", e)))?;
             let value_len = u16::from_be_bytes(value_len_bytes) as usize;
             let mut value = vec![0u8; value_len];
-            input.read_exact(&mut value).map_err(|e| Error::Parser(format!("Failed to read value: {}", e)))?;
+            input
+                .read_exact(&mut value)
+                .map_err(|e| Error::Parser(format!("Failed to read value: {}", e)))?;
             Ok(Op::PushInverted(Node::KV(key, value)))
         }
         0x0b => {
             let mut key_len_byte = [0u8; 1];
-            input.read_exact(&mut key_len_byte).map_err(|e| Error::Parser(format!("Failed to read key length: {}", e)))?;
+            input
+                .read_exact(&mut key_len_byte)
+                .map_err(|e| Error::Parser(format!("Failed to read key length: {}", e)))?;
             let key_len = key_len_byte[0] as usize;
             let mut key = vec![0u8; key_len];
-            input.read_exact(&mut key).map_err(|e| Error::Parser(format!("Failed to read key: {}", e)))?;
+            input
+                .read_exact(&mut key)
+                .map_err(|e| Error::Parser(format!("Failed to read key: {}", e)))?;
             let mut value_len_bytes = [0u8; 2];
-            input.read_exact(&mut value_len_bytes).map_err(|e| Error::Parser(format!("Failed to read value length: {}", e)))?;
+            input
+                .read_exact(&mut value_len_bytes)
+                .map_err(|e| Error::Parser(format!("Failed to read value length: {}", e)))?;
             let value_len = u16::from_be_bytes(value_len_bytes) as usize;
             let mut value = vec![0u8; value_len];
-            input.read_exact(&mut value).map_err(|e| Error::Parser(format!("Failed to read value: {}", e)))?;
+            input
+                .read_exact(&mut value)
+                .map_err(|e| Error::Parser(format!("Failed to read value: {}", e)))?;
             let mut value_hash = [0u8; 32];
-            input.read_exact(&mut value_hash).map_err(|e| Error::Parser(format!("Failed to read value hash: {}", e)))?;
+            input
+                .read_exact(&mut value_hash)
+                .map_err(|e| Error::Parser(format!("Failed to read value hash: {}", e)))?;
             Ok(Op::PushInverted(Node::KVValueHash(key, value, value_hash)))
         }
         0x0c => {
             let mut key_len_byte = [0u8; 1];
-            input.read_exact(&mut key_len_byte).map_err(|e| Error::Parser(format!("Failed to read key length: {}", e)))?;
+            input
+                .read_exact(&mut key_len_byte)
+                .map_err(|e| Error::Parser(format!("Failed to read key length: {}", e)))?;
             let key_len = key_len_byte[0] as usize;
             let mut key = vec![0u8; key_len];
-            input.read_exact(&mut key).map_err(|e| Error::Parser(format!("Failed to read key: {}", e)))?;
+            input
+                .read_exact(&mut key)
+                .map_err(|e| Error::Parser(format!("Failed to read key: {}", e)))?;
             let mut value_hash = [0u8; 32];
-            input.read_exact(&mut value_hash).map_err(|e| Error::Parser(format!("Failed to read value hash: {}", e)))?;
+            input
+                .read_exact(&mut value_hash)
+                .map_err(|e| Error::Parser(format!("Failed to read value hash: {}", e)))?;
             Ok(Op::PushInverted(Node::KVDigest(key, value_hash)))
         }
         0x0d => {
             // KVRefValueHash inverted
             let mut key_len_byte = [0u8; 1];
-            input.read_exact(&mut key_len_byte).map_err(|e| Error::Parser(format!("Failed to read key length: {}", e)))?;
+            input
+                .read_exact(&mut key_len_byte)
+                .map_err(|e| Error::Parser(format!("Failed to read key length: {}", e)))?;
             let key_len = key_len_byte[0] as usize;
             let mut key = vec![0u8; key_len];
-            input.read_exact(&mut key).map_err(|e| Error::Parser(format!("Failed to read key: {}", e)))?;
+            input
+                .read_exact(&mut key)
+                .map_err(|e| Error::Parser(format!("Failed to read key: {}", e)))?;
             let mut value_len_bytes = [0u8; 2];
-            input.read_exact(&mut value_len_bytes).map_err(|e| Error::Parser(format!("Failed to read value length: {}", e)))?;
+            input
+                .read_exact(&mut value_len_bytes)
+                .map_err(|e| Error::Parser(format!("Failed to read value length: {}", e)))?;
             let value_len = u16::from_be_bytes(value_len_bytes) as usize;
             let mut value = vec![0u8; value_len];
-            input.read_exact(&mut value).map_err(|e| Error::Parser(format!("Failed to read value: {}", e)))?;
+            input
+                .read_exact(&mut value)
+                .map_err(|e| Error::Parser(format!("Failed to read value: {}", e)))?;
             let mut value_hash = [0u8; 32];
-            input.read_exact(&mut value_hash).map_err(|e| Error::Parser(format!("Failed to read value hash: {}", e)))?;
+            input
+                .read_exact(&mut value_hash)
+                .map_err(|e| Error::Parser(format!("Failed to read value hash: {}", e)))?;
             Ok(Op::PushInverted(Node::KVValueHash(key, value, value_hash)))
         }
         0x0e => {
             // KVValueHashFeatureType inverted (ignore feature type)
             let mut key_len_byte = [0u8; 1];
-            input.read_exact(&mut key_len_byte).map_err(|e| Error::Parser(format!("Failed to read key length: {}", e)))?;
+            input
+                .read_exact(&mut key_len_byte)
+                .map_err(|e| Error::Parser(format!("Failed to read key length: {}", e)))?;
             let key_len = key_len_byte[0] as usize;
             let mut key = vec![0u8; key_len];
-            input.read_exact(&mut key).map_err(|e| Error::Parser(format!("Failed to read key: {}", e)))?;
+            input
+                .read_exact(&mut key)
+                .map_err(|e| Error::Parser(format!("Failed to read key: {}", e)))?;
             let mut value_len_bytes = [0u8; 2];
-            input.read_exact(&mut value_len_bytes).map_err(|e| Error::Parser(format!("Failed to read value length: {}", e)))?;
+            input
+                .read_exact(&mut value_len_bytes)
+                .map_err(|e| Error::Parser(format!("Failed to read value length: {}", e)))?;
             let value_len = u16::from_be_bytes(value_len_bytes) as usize;
             let mut value = vec![0u8; value_len];
-            input.read_exact(&mut value).map_err(|e| Error::Parser(format!("Failed to read value: {}", e)))?;
+            input
+                .read_exact(&mut value)
+                .map_err(|e| Error::Parser(format!("Failed to read value: {}", e)))?;
             let mut value_hash = [0u8; 32];
-            input.read_exact(&mut value_hash).map_err(|e| Error::Parser(format!("Failed to read value hash: {}", e)))?;
+            input
+                .read_exact(&mut value_hash)
+                .map_err(|e| Error::Parser(format!("Failed to read value hash: {}", e)))?;
             let mut _feature = [0u8; 1];
             let _ = input.read_exact(&mut _feature);
             Ok(Op::PushInverted(Node::KVValueHash(key, value, value_hash)))
@@ -329,9 +397,7 @@ pub fn parse_proof_operations(proof_bytes: &[u8]) -> Result<Vec<Op>> {
     }
 
     if !found_start {
-        println!(
-            "[Parser] Warning: Could not find operation start, using default position"
-        );
+        println!("[Parser] Warning: Could not find operation start, using default position");
         start_pos = 37; // Fallback to observed position in test data
     }
 
@@ -475,14 +541,13 @@ fn path_from_ops(ops: &[grovedb_merk::proofs::Op]) -> Vec<MerkleNode> {
         } else {
             None
         };
-        stack.push(Item { contains_leaf, hash });
+        stack.push(Item {
+            contains_leaf,
+            hash,
+        });
     }
 
-    fn combine(
-        stack: &mut Vec<Item>,
-        left_is_child: bool,
-        path: &mut Vec<MerkleNode>,
-    ) {
+    fn combine(stack: &mut Vec<Item>, left_is_child: bool, path: &mut Vec<MerkleNode>) {
         if stack.len() < 2 {
             return;
         }
@@ -568,16 +633,15 @@ pub fn parse_grovedb_nodes(proof_bytes: &[u8]) -> Result<Vec<MerkleNode>> {
         proof_bytes.len()
     );
 
-    // Preferred path: decode layered GroveDB proof, then parse inner merk_proof ops
-    // Preferred: decode layered GroveDB proof using bincode v2 (BE, no limit) and walk layers
+    // Decode layered GroveDB proof, then parse inner merk_proof ops
     let layered_decoded: crate::Result<grovedb::operations::proof::GroveDBProof> = (|| {
         use bincode;
-        let cfg = bincode::config::standard().with_big_endian().with_no_limit();
-        bincode::decode_from_slice::<grovedb::operations::proof::GroveDBProof, _>(
-            proof_bytes, cfg,
-        )
-        .map(|(p, _)| p)
-        .map_err(|e| crate::Error::Parser(format!("Layered decode failed (bincode2): {}", e)))
+        let cfg = bincode::config::standard()
+            .with_big_endian()
+            .with_no_limit();
+        bincode::decode_from_slice::<grovedb::operations::proof::GroveDBProof, _>(proof_bytes, cfg)
+            .map(|(p, _)| p)
+            .map_err(|e| crate::Error::Parser(format!("Layered decode failed (bincode2): {}", e)))
     })();
 
     if let Ok(layered) = layered_decoded {
@@ -686,7 +750,6 @@ pub fn parse_grovedb_nodes(proof_bytes: &[u8]) -> Result<Vec<MerkleNode>> {
 /// Deterministic policy:
 /// - Prefer GroveVM op decoding: collect all 32-byte KV-style keys and return the last one
 ///   encountered in the stream (closest to the leaf for SDK proofs).
-/// - Fallback to a robust byte-pattern scan (0x04 0x20 <32B>) and return the last candidate.
 /// - If none found, error.
 pub fn extract_closest_identity_id_from_key_proof(proof_bytes: &[u8]) -> Result<[u8; 32]> {
     let ops = parse_proof_operations(proof_bytes).unwrap_or_default();
@@ -708,24 +771,6 @@ pub fn extract_closest_identity_id_from_key_proof(proof_bytes: &[u8]) -> Result<
     }
 
     if let Some(last) = keys32.last() {
-        return Ok(*last);
-    }
-
-    // Fallback: scan for 0x04 0x20 <32B> occurrences
-    let mut candidates: Vec<[u8; 32]> = Vec::new();
-    let mut i = 0usize;
-    while i + 34 <= proof_bytes.len() {
-        if proof_bytes[i] == 0x04 && proof_bytes[i + 1] == 0x20 {
-            let mut id = [0u8; 32];
-            id.copy_from_slice(&proof_bytes[i + 2..i + 34]);
-            candidates.push(id);
-            i += 34;
-            continue;
-        }
-        i += 1;
-    }
-
-    if let Some(last) = candidates.last() {
         return Ok(*last);
     }
 

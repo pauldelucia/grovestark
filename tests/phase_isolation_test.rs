@@ -126,9 +126,11 @@ fn test_merkle_window_fixture() {
     let proof = prover
         .prove(witness, public_inputs.clone())
         .expect("prove(pass fixtures)");
-    assert!(proof.public_outputs.verified, "Proof should verify with fixtures");
+    assert!(
+        proof.public_outputs.verified,
+        "Proof should verify with fixtures"
+    );
 
     let verification_result = prover.verify(&proof, &public_inputs).unwrap();
     assert!(verification_result, "Verification failed for fixture proof");
 }
-

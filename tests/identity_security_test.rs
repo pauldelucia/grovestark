@@ -141,12 +141,15 @@ fn test_integration_with_sdk_proofs() {
     .expect("read identity proof");
 
     // Derive owner_id by extracting identity_id from the key proof and encoding to JSON
-    let identity_id = grovestark::parser::grovedb_executor::extract_closest_identity_id_from_key_proof(
-        &identity_proof,
-    )
-    .expect("extract identity id from proof");
+    let identity_id =
+        grovestark::parser::grovedb_executor::extract_closest_identity_id_from_key_proof(
+            &identity_proof,
+        )
+        .expect("extract identity id from proof");
     let owner_b58 = bs58::encode(identity_id).into_string();
-    let document_json = serde_json::json!({"$ownerId": owner_b58}).to_string().into_bytes();
+    let document_json = serde_json::json!({"$ownerId": owner_b58})
+        .to_string()
+        .into_bytes();
 
     let signature_r = [50u8; 32];
     let signature_s = [51u8; 32];

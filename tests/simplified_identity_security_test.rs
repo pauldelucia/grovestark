@@ -5,22 +5,57 @@ use hex;
 
 // Fixture loader: returns (doc_proof, key_proof_pass, key_proof_fail, document_json, pubkey, sig_r, sig_s, message, privkey)
 fn load_fixtures() -> (
-    Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, [u8; 32], [u8; 32], [u8; 32], Vec<u8>, [u8; 32]
+    Vec<u8>,
+    Vec<u8>,
+    Vec<u8>,
+    Vec<u8>,
+    [u8; 32],
+    [u8; 32],
+    [u8; 32],
+    Vec<u8>,
+    [u8; 32],
 ) {
     #[derive(serde::Deserialize)]
-    struct Ed25519Fix { public_key_hex: String, signature_r_hex: String, signature_s_hex: String, private_key_hex: String }
+    struct Ed25519Fix {
+        public_key_hex: String,
+        signature_r_hex: String,
+        signature_s_hex: String,
+        private_key_hex: String,
+    }
     #[derive(serde::Deserialize)]
-    struct PubInputsFix { state_root_hex: String, contract_id_hex: String, message_hex: String, timestamp: u64 }
+    struct PubInputsFix {
+        state_root_hex: String,
+        contract_id_hex: String,
+        message_hex: String,
+        timestamp: u64,
+    }
     #[derive(serde::Deserialize)]
-    struct PassFix { document_json: String, document_proof_hex: String, key_proof_hex: String, public_inputs: PubInputsFix, ed25519: Ed25519Fix }
+    struct PassFix {
+        document_json: String,
+        document_proof_hex: String,
+        key_proof_hex: String,
+        public_inputs: PubInputsFix,
+        ed25519: Ed25519Fix,
+    }
     #[derive(serde::Deserialize)]
-    struct FailFix { key_proof_hex_fail: String }
+    struct FailFix {
+        key_proof_hex_fail: String,
+    }
     #[derive(serde::Deserialize)]
-    struct Fixtures { pass: PassFix, fail: FailFix }
+    struct Fixtures {
+        pass: PassFix,
+        fail: FailFix,
+    }
 
-    fn hex32(s: &str) -> [u8; 32] { let v = hex::decode(s).unwrap(); let mut out=[0u8;32]; out.copy_from_slice(&v); out }
+    fn hex32(s: &str) -> [u8; 32] {
+        let v = hex::decode(s).unwrap();
+        let mut out = [0u8; 32];
+        out.copy_from_slice(&v);
+        out
+    }
 
-    let fixtures: Fixtures = serde_json::from_str(include_str!("fixtures/PASS_AND_FAIL.json")).unwrap();
+    let fixtures: Fixtures =
+        serde_json::from_str(include_str!("fixtures/PASS_AND_FAIL.json")).unwrap();
     let doc_proof = hex::decode(&fixtures.pass.document_proof_hex).unwrap();
     let key_proof_pass = hex::decode(&fixtures.pass.key_proof_hex).unwrap();
     let key_proof_fail = hex::decode(&fixtures.fail.key_proof_hex_fail).unwrap();
@@ -45,8 +80,17 @@ fn load_fixtures() -> (
 #[test]
 fn test_rejects_mismatched_owner_identity() {
     // Use real fixtures: mismatched key proof should be rejected with ownership error
-    let (doc_proof, _key_proof_pass, key_proof_fail, document_json, pubkey, sig_r, sig_s, message, privkey) =
-        load_fixtures();
+    let (
+        doc_proof,
+        _key_proof_pass,
+        key_proof_fail,
+        document_json,
+        pubkey,
+        sig_r,
+        sig_s,
+        message,
+        privkey,
+    ) = load_fixtures();
 
     let result = create_witness_from_platform_proofs(
         &doc_proof,
