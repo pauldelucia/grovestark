@@ -1,7 +1,4 @@
-use grovestark::{
-    create_witness_from_platform_proofs, create_witness_from_platform_proofs_no_validation,
-    GroveSTARK, PublicInputs, STARKConfig,
-};
+use grovestark::{create_witness_from_platform_proofs, GroveSTARK, PublicInputs, STARKConfig};
 use serde::Deserialize;
 
 fn hex32(s: &str) -> [u8; 32] {
@@ -136,7 +133,7 @@ fn det_logs_fail_case_rejects() {
     let privkey = hex32(&fixtures.pass.ed25519.private_key_hex);
 
     // Build witness using the no-validation path to allow mismatched identity
-    let witness = create_witness_from_platform_proofs_no_validation(
+    let witness = create_witness_from_platform_proofs(
         &doc_proof,
         &key_proof_fail,
         fixtures.pass.document_json.as_bytes().to_vec(),

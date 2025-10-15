@@ -78,7 +78,7 @@ fn test_identity_extraction_offset_issue() {
 
 #[test]
 fn test_validation_bypass_vulnerability() {
-    use grovestark::ed25519_helpers::create_witness_from_platform_proofs_no_validation;
+    use grovestark::ed25519_helpers::create_witness_from_platform_proofs;
 
     println!("Testing potential validation bypass vulnerability");
 
@@ -101,7 +101,7 @@ fn test_validation_bypass_vulnerability() {
     let document_proof = vec![0u8; 1000];
 
     // Create witness using no_validation (simulating attacker)
-    let witness_result = create_witness_from_platform_proofs_no_validation(
+    let witness_result = create_witness_from_platform_proofs(
         &document_proof,
         &key_proof,
         document_json.as_bytes().to_vec(),

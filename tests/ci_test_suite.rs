@@ -205,8 +205,6 @@ fn ci_test_4_parameter_guardrails() {
     const MIN_NUM_QUERIES: usize = 48;
     const MIN_FOLDING_FACTOR: usize = 4;
 
-    let config = STARKConfig::default();
-
     // In production, these should be the defaults
     // For now, just document what they should be
     println!("  Production minimums:");

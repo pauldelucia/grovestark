@@ -84,8 +84,8 @@ fn test_comprehensive_proof_analysis() {
         println!("\nSequence starting at position {}:", start);
         for (i, op) in ops.iter().enumerate().take(5) {
             match op {
-                MerkOp::Push(node) => println!("  {}: Push(...)", i),
-                MerkOp::PushInverted(node) => println!("  {}: PushInverted(...)", i),
+                MerkOp::Push(_node) => println!("  {}: Push(...)", i),
+                MerkOp::PushInverted(_node) => println!("  {}: PushInverted(...)", i),
                 MerkOp::Parent => println!("  {}: Parent", i),
                 MerkOp::Child => println!("  {}: Child", i),
                 MerkOp::ParentInverted => println!("  {}: ParentInverted", i),

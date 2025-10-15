@@ -50,21 +50,17 @@ pub use types::{
     BatchProof, MerkleNode, PrivateInputs, PublicInputs, PublicOutputs, STARKConfig, STARKProof,
 };
 
-// Ed25519 point conversion utilities for integration
+// Ed25519 point conversion utilities
 pub use crypto::ed25519::{
     augment_witness_with_extended, decompress_ed25519_point, decompress_to_extended_limbs,
     limbs_to_bytes_le, DecompressError, ExtPointLimbs,
 };
 
-// Ed25519 helpers for Dash Evo Tool integration
+// Ed25519 helpers
 pub use ed25519_helpers::{
     compressed_to_extended, compute_eddsa_hash_h, create_witness_from_platform_proofs,
     populate_witness_with_extended,
 };
 
-// Testing-only function - DO NOT USE IN PRODUCTION
-#[doc(hidden)]
-pub use ed25519_helpers::create_witness_from_platform_proofs_no_validation;
-
-// GroveDB proof parsing for Dash Evo Tool integration
+// GroveDB proof parsing
 pub use parser::{parse_grovedb_proof, parse_raw_merk_proof, GroveDBParser};

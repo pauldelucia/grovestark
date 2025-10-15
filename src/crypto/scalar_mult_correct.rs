@@ -332,15 +332,15 @@ pub fn eddsa_verify_combine(
     basepoint_ext: &ExtPoint,
 ) -> ExtPoint {
     // [s]B and [h]A
-    let sB = mul_point_by_scalar_le_bytes(basepoint_ext, s_le);
-    let hA = mul_point_by_scalar_le_bytes(a_ext, h_le);
+    let s_b = mul_point_by_scalar_le_bytes(basepoint_ext, s_le);
+    let h_a = mul_point_by_scalar_le_bytes(a_ext, h_le);
 
     // Combine: sB - R - hA = sB + (-R) + (-hA)
     let minus_r = ed_neg(r_ext);
-    let minus_hA = ed_neg(&hA);
+    let minus_h_a = ed_neg(&h_a);
 
-    let p1 = ed_add(&sB, &minus_r);
-    let mut final_p = ed_add(&p1, &minus_hA);
+    let p1 = ed_add(&s_b, &minus_r);
+    let mut final_p = ed_add(&p1, &minus_h_a);
 
     // No cofactor clearing needed for EdDSA verification
     if is_identity_projective(&final_p) {

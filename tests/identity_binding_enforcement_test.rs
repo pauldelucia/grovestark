@@ -4,10 +4,7 @@
 //! 1. Valid proofs (owner_id == identity_id) pass verification
 //! 2. Invalid proofs (owner_id != identity_id) fail during proof generation due to constraint violations
 
-use grovestark::{
-    create_witness_from_platform_proofs, create_witness_from_platform_proofs_no_validation,
-    GroveSTARK, PublicInputs,
-};
+use grovestark::{create_witness_from_platform_proofs, GroveSTARK, PublicInputs};
 
 #[test]
 fn test_identity_binding_enforced_with_real_data() {
@@ -94,7 +91,7 @@ fn test_identity_binding_enforced_with_real_data() {
     println!("\nStep 2: Testing constraint enforcement (bypassing validation)");
 
     // Now use the no-validation function to bypass the check and test constraints
-    let witness_result = create_witness_from_platform_proofs_no_validation(
+    let witness_result = create_witness_from_platform_proofs(
         &document_proof,
         &key_proof,
         document_json,

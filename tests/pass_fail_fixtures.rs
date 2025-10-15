@@ -1,7 +1,4 @@
-use grovestark::{
-    create_witness_from_platform_proofs, create_witness_from_platform_proofs_no_validation,
-    GroveSTARK, PublicInputs, STARKConfig,
-};
+use grovestark::{create_witness_from_platform_proofs, GroveSTARK, PublicInputs, STARKConfig};
 
 fn hex32(s: &str) -> [u8; 32] {
     let v = hex::decode(s).expect("hex32 decode");
@@ -153,7 +150,7 @@ fn test_fixture_end_to_end_invalid() {
     }
 
     // Build using no-validation path to proceed with negative test
-    let witness = create_witness_from_platform_proofs_no_validation(
+    let witness = create_witness_from_platform_proofs(
         &document_proof,
         &mismatched_key_proof,
         fixtures.pass.document_json.as_bytes().to_vec(),

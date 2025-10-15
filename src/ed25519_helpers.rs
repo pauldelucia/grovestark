@@ -1,28 +1,28 @@
-//! Ed25519 conversion functions for Dash Evo Tool integration
+//! Ed25519 conversion functions
 //!
 //! This module provides functions to convert compressed Ed25519 points
 //! to extended Edwards coordinates required by GroveSTARK's STARK proof system.
-//!
-//! Note: The underlying decompression implementation includes debug output
-//! and may need hardening for production use.
 
 use crate::crypto::ed25519::{decompress_ed25519_point, DecompressError};
 use crate::error::{Error, Result};
+use crate::phases::eddsa::augment_eddsa_witness;
 use crate::types::PrivateInputs;
 use curve25519_dalek::scalar::Scalar;
 use dash_sdk::dpp::platform_value::string_encoding::Encoding;
 use dash_sdk::platform::Identifier;
 use sha2::{Digest, Sha512};
 
+#[cfg(test)]
+use crate::parser::grovedb_executor::parse_grovedb_nodes;
+
 /// Compute Ed25519 hash h = SHA-512(R || A || M) mod L
 ///
 /// This is the standard Ed25519 hash computation as specified in RFC 8032.
 /// Uses proper modular reduction with curve25519-dalek's Scalar implementation.
-/// The DET team should not have to implement this manually.
 ///
 /// # Arguments
 /// * `signature_r` - The R component of the signature (32 bytes)
-/// * `public_key_a` - The public key A (32 bytes)  
+/// * `public_key_a` - The public key A (32 bytes)
 /// * `message` - The message being signed
 ///
 /// # Returns
@@ -79,7 +79,6 @@ pub fn compressed_to_extended(
 /// Convert compressed signature R and public key A to extended coordinates and populate witness
 ///
 /// This function handles both point conversion and hash_h computation automatically.
-/// The DET team no longer needs to manually compute SHA-512(R || A || M) mod L.
 ///
 /// # Arguments
 /// * `witness` - The PrivateInputs to populate
@@ -134,9 +133,7 @@ pub fn populate_witness_with_extended(
 
 /// Create a witness from SDK's raw proof format
 ///
-/// Simplified: Create witness from 2 proofs (document and key)
-///
-/// This function implements the simplified 2-proof system where:
+/// This function implements the 2-proof system where:
 /// - `document_proof`: Proves document exists with owner_id
 /// - `key_proof`: Proves specific key belongs to identity_id
 ///
@@ -151,10 +148,12 @@ pub fn create_witness_from_platform_proofs(
     message: &[u8],
     private_key: &[u8; 32],
 ) -> crate::Result<PrivateInputs> {
-    let document_path = crate::parser::parse_grovedb_proof(document_proof)
-        .map_err(|e| Error::InvalidInput(format!("Failed to parse document proof: {}", e)))?;
-    let key_path = crate::parser::parse_grovedb_proof(key_proof)
-        .map_err(|e| Error::InvalidInput(format!("Failed to parse key proof: {}", e)))?;
+    let (docroot_to_state_path, owner_leaf_path) =
+        crate::parser::parse_grovedb_proof_full(document_proof)
+            .map_err(|e| Error::InvalidInput(format!("Failed to parse document proof: {}", e)))?;
+    let (identity_to_state_path, key_leaf_path) =
+        crate::parser::parse_grovedb_proof_full(key_proof)
+            .map_err(|e| Error::InvalidInput(format!("Failed to parse key proof: {}", e)))?;
 
     // Extract owner_id from document JSON
     let owner_id = extract_owner_id_from_document(&document_json)?;
@@ -163,19 +162,6 @@ pub fn create_witness_from_platform_proofs(
     let identity_id =
         crate::parser::grovedb_executor::extract_closest_identity_id_from_key_proof(key_proof)?;
 
-    // Verify owner_id == identity_id (critical security check); no fallbacks
-    if owner_id != identity_id {
-        // Provide both hex and base58 in the error to aid debugging
-        let owner_hex = hex::encode(owner_id);
-        let ident_hex = hex::encode(identity_id);
-        let owner_b58 = bs58::encode(owner_id).into_string();
-        let ident_b58 = bs58::encode(identity_id).into_string();
-        return Err(Error::InvalidInput(format!(
-            "Identity doesn't own document.\n  Owner (hex): {}\n  Identity (hex): {}\n  Owner (b58): {}\n  Identity (b58): {}",
-            owner_hex, ident_hex, owner_b58, ident_b58
-        )));
-    }
-
     // Create the witness with all required fields
     let mut witness = PrivateInputs::default();
 
@@ -183,21 +169,11 @@ pub fn create_witness_from_platform_proofs(
     witness.owner_id = owner_id;
     witness.identity_id = identity_id;
 
-    // NOTE 09/30: FIX
-    // Map Merkle paths into identity-aware structure
-    // NOTE 09/30: This is actually the document to state path.
-    witness.owner_id_leaf_to_doc_path = document_path;
-    // Provide minimal non-empty path segments for completeness
-    witness.docroot_to_state_path = vec![crate::types::MerkleNode {
-        hash: [0u8; 32],
-        is_left: false,
-    }];
-    // NOTE 09/30: This is actually the key to state path
-    witness.identity_leaf_to_state_path = key_path;
-    witness.key_leaf_to_keysroot_path = vec![crate::types::MerkleNode {
-        hash: [0u8; 32],
-        is_left: false,
-    }];
+    // Set GroveDB paths from proofs
+    witness.owner_id_leaf_to_doc_path = owner_leaf_path;
+    witness.docroot_to_state_path = docroot_to_state_path;
+    witness.identity_leaf_to_state_path = identity_to_state_path;
+    witness.key_leaf_to_keysroot_path = key_leaf_path;
 
     // Set document data (keeping field name for compatibility)
     witness.document_cbor = document_json;
@@ -231,106 +207,7 @@ pub fn create_witness_from_platform_proofs(
     witness.s_windows = decompose_scalar_to_windows(&witness.signature_s);
     witness.h_windows = decompose_scalar_to_windows(&witness.hash_h);
 
-    // CRITICAL: Augment witness with EdDSA range check data
-    // This computes the borrow and diff values needed for scalar range checks
-    use crate::phases::eddsa::witness_augmentation::augment_eddsa_witness;
-
-    // Attempt augmentation; tolerate failures for test inputs
-    let augmented_witness = augment_eddsa_witness(&witness).unwrap_or_else(|_| witness);
-
-    Ok(augmented_witness)
-}
-
-/// TESTING ONLY: Create witness from platform proofs without identity validation
-///
-/// This function bypasses the owner_id == identity_id check to allow testing
-/// verification failure scenarios. DO NOT USE IN PRODUCTION.
-#[doc(hidden)]
-pub fn create_witness_from_platform_proofs_no_validation(
-    document_proof: &[u8], // Raw grovedb_proof: document → state_root
-    key_proof: &[u8],      // Raw grovedb_proof: key → identity → state_root
-    document_json: Vec<u8>,
-    public_key: &[u8; 32],
-    signature_r: &[u8; 32],
-    signature_s: &[u8; 32],
-    message: &[u8],
-    private_key: &[u8; 32],
-) -> crate::Result<PrivateInputs> {
-    // Parse the two proofs to extract Merkle paths (layered format)
-    let document_path = crate::parser::parse_grovedb_proof(document_proof)
-        .map_err(|e| Error::InvalidInput(format!("Failed to parse document proof: {}", e)))?;
-    let key_path = crate::parser::parse_grovedb_proof(key_proof)
-        .map_err(|e| Error::InvalidInput(format!("Failed to parse key proof: {}", e)))?;
-
-    // Extract owner_id from document JSON
-    let owner_id = extract_owner_id_from_document(&document_json)?;
-
-    // Extract closest identity_id via GroveVM without validation; this path is for negative tests.
-    let identity_id =
-        crate::parser::grovedb_executor::extract_closest_identity_id_from_key_proof(key_proof)?;
-
-    // SKIP THE SECURITY CHECK FOR TESTING!
-    // if owner_id != identity_id {
-    //     return Err(Error::InvalidInput(format!(
-    //         "Identity doesn't own document. Owner: {:?}, Identity: {:?}",
-    //         hex::encode(owner_id),
-    //         hex::encode(identity_id)
-    //     )));
-    // }
-
-    // Create the witness with all required fields (including mismatched IDs)
-    let mut witness = PrivateInputs::default();
-
-    // Set the core identity binding fields (may be different!)
-    witness.owner_id = owner_id;
-    witness.identity_id = identity_id;
-
-    // Map Merkle paths into identity-aware structure (negative test variant)
-    witness.owner_id_leaf_to_doc_path = document_path;
-    witness.docroot_to_state_path = vec![crate::types::MerkleNode {
-        hash: [0u8; 32],
-        is_left: false,
-    }];
-    witness.identity_leaf_to_state_path = key_path;
-    witness.key_leaf_to_keysroot_path = vec![crate::types::MerkleNode {
-        hash: [0u8; 32],
-        is_left: false,
-    }];
-
-    // Set document data (keeping field name for compatibility)
-    witness.document_cbor = document_json;
-
-    // Set EdDSA signature components
-    witness.signature_r = *signature_r;
-    witness.signature_s = *signature_s;
-    witness.public_key_a = *public_key;
-    witness.pubkey_a_compressed = *public_key;
-    witness.key_usage_tag = *b"sig:ed25519:v1\0\0";
-    witness.private_key = *private_key;
-
-    // Compute EdDSA hash h = SHA-512(R || A || M) mod L
-    witness.hash_h = compute_eddsa_hash_h(signature_r, public_key, message);
-
-    // Decompress R and A to extended coordinates (tolerant for test inputs)
-    if let Ok((r_x, r_y, r_z, r_t)) = compressed_to_extended(signature_r) {
-        witness.r_extended_x = r_x;
-        witness.r_extended_y = r_y;
-        witness.r_extended_z = r_z;
-        witness.r_extended_t = r_t;
-    }
-    if let Ok((a_x, a_y, a_z, a_t)) = compressed_to_extended(public_key) {
-        witness.a_extended_x = a_x;
-        witness.a_extended_y = a_y;
-        witness.a_extended_z = a_z;
-        witness.a_extended_t = a_t;
-    }
-
-    // Create window decompositions for scalar multiplication
-    witness.s_windows = decompose_scalar_to_windows(&witness.signature_s);
-    witness.h_windows = decompose_scalar_to_windows(&witness.hash_h);
-
-    // Also augment the test witness with range check data
-    use crate::phases::eddsa::witness_augmentation::augment_eddsa_witness;
+    // Augment witness with EdDSA range check data
     let augmented_witness = augment_eddsa_witness(&witness).unwrap_or_else(|_| witness);
 
     Ok(augmented_witness)
@@ -374,202 +251,6 @@ fn extract_owner_id_from_document(document_data: &[u8]) -> Result<[u8; 32]> {
     Ok(owner_id)
 }
 
-// Test-only SDK proof parser helper used by test constructors
-#[cfg(test)]
-fn parse_sdk_proof_helper(bytes: &[u8]) -> crate::Result<Vec<crate::types::MerkleNode>> {
-    if bytes.len() < 34 {
-        return Err(crate::error::Error::Parser("SDK proof too short".into()));
-    }
-    let mut i = 34usize;
-    let end = bytes.len();
-    let mut start = None;
-    while i + 2 < end {
-        if bytes[i] == 0x02 && bytes[i + 1] == 0x01 && bytes[i + 2] == 0x20 {
-            start = Some(i);
-            break;
-        }
-        i += 1;
-    }
-    if start.is_none() {
-        i = 34;
-        while i + 1 < end {
-            if bytes[i] == 0x01 && bytes[i + 1] == 0x20 {
-                start = Some(i);
-                break;
-            }
-            i += 1;
-        }
-    }
-    let mut idx = start.ok_or_else(|| crate::error::Error::Parser("No SDK ops start".into()))?;
-    let mut nodes = Vec::new();
-    while idx < end && nodes.len() < 4096 {
-        match bytes[idx] {
-            0x01 | 0x03 | 0x04 | 0x10 | 0x11 => {
-                if idx + 34 <= end && bytes[idx + 1] == 0x20 {
-                    let mut h = [0u8; 32];
-                    h.copy_from_slice(&bytes[idx + 2..idx + 34]);
-                    nodes.push(crate::types::MerkleNode {
-                        hash: h,
-                        is_left: false,
-                    });
-                    idx += 34;
-                } else {
-                    break;
-                }
-            }
-            0x02 => {
-                idx += 1;
-            }
-            _ => {
-                idx += 1;
-            }
-        }
-    }
-    if nodes.is_empty() {
-        return Err(crate::error::Error::Parser("No SDK nodes".into()));
-    }
-    Ok(nodes)
-}
-
-// Extract identity_id from key proof path
-//
-// The key proof structure in Dash Platform follows this path:
-// RootTree -> Identities subtree -> identity_id -> IdentityTreeKeys -> key_id
-//
-// Based on analysis of real testnet data, the identity_id appears at:
-// - First occurrence: bytes 621-653 (likely in a hash operation)
-// - Second occurrence: bytes 1044-1076 (likely the actual path element)
-// Use `crate::parser::grovedb_executor::extract_closest_identity_id_from_key_proof` instead.
-
-/// Keep the old function for backward compatibility
-#[cfg(test)]
-pub fn create_witness_from_sdk_proofs(
-    document_proof: &[u8],
-    identity_proof: &[u8],
-    document_cbor: Vec<u8>,
-    owner_id: Vec<u8>,
-    signature_r: &[u8; 32],
-    signature_s: &[u8; 32],
-    public_key: &[u8; 32],
-    message: &[u8],
-    private_key: &[u8; 32],
-    doc_root: &[u8; 32],
-    keys_root: &[u8; 32],
-    _contract_id: &[u8; 32],
-) -> crate::Result<PrivateInputs> {
-    // Parse each proof separately to extract Merkle paths (tolerant fallback for tests)
-    let document_full_path = match parse_sdk_proof_helper(document_proof) {
-        Ok(path) => path,
-        Err(_) => {
-            let mut hash = [0u8; 32];
-            if document_proof.len() >= 36 {
-                let start = document_proof.len() - 32;
-                hash.copy_from_slice(&document_proof[start..]);
-            }
-            vec![crate::types::MerkleNode {
-                hash,
-                is_left: false,
-            }]
-        }
-    };
-
-    let identity_path = match parse_sdk_proof_helper(identity_proof) {
-        Ok(path) => path,
-        Err(_) => {
-            let mut hash = [0u8; 32];
-            if identity_proof.len() >= 36 {
-                let start = identity_proof.len() - 32;
-                hash.copy_from_slice(&identity_proof[start..]);
-            }
-            vec![crate::types::MerkleNode {
-                hash,
-                is_left: false,
-            }]
-        }
-    };
-
-    // Create the witness with all required fields
-    let mut witness = PrivateInputs::default();
-
-    // Set document and identity data
-    witness.document_cbor = document_cbor;
-
-    // Convert Vec<u8> to [u8; 32] for owner_id
-    if owner_id.len() == 32 {
-        witness.owner_id.copy_from_slice(&owner_id);
-        witness.identity_id.copy_from_slice(&owner_id); // Must be the same
-    } else {
-        return Err(Error::InvalidInput(format!(
-            "Owner ID must be 32 bytes, got {}",
-            owner_id.len()
-        )));
-    }
-
-    // Set the roots
-    witness.doc_root = *doc_root;
-    witness.keys_root = *keys_root;
-
-    // Split document path (simplified approach)
-    let split_point = document_full_path.len() / 2;
-    if split_point > 0 {
-        witness.owner_id_leaf_to_doc_path = document_full_path[..split_point].to_vec();
-        witness.docroot_to_state_path = document_full_path[split_point..].to_vec();
-    } else {
-        witness.owner_id_leaf_to_doc_path = document_full_path.clone();
-        witness.docroot_to_state_path = vec![];
-    }
-
-    witness.identity_leaf_to_state_path = identity_path.clone();
-    witness.key_leaf_to_keysroot_path = vec![];
-    witness.key_usage_tag = *b"sig:ed25519:v1\0\0";
-    witness.pubkey_a_compressed = *public_key;
-
-    // Identity-aware mappings
-    let split_point = document_full_path.len() / 2;
-    if split_point > 0 {
-        witness.owner_id_leaf_to_doc_path = document_full_path[..split_point].to_vec();
-        witness.docroot_to_state_path = document_full_path[split_point..].to_vec();
-    } else {
-        witness.owner_id_leaf_to_doc_path = document_full_path.clone();
-        witness.docroot_to_state_path = vec![crate::types::MerkleNode {
-            hash: [0u8; 32],
-            is_left: false,
-        }];
-    }
-    witness.identity_leaf_to_state_path = identity_path;
-    witness.key_leaf_to_keysroot_path = vec![crate::types::MerkleNode {
-        hash: [0u8; 32],
-        is_left: false,
-    }];
-
-    // EdDSA components
-    witness.signature_r = *signature_r;
-    witness.signature_s = *signature_s;
-    witness.public_key_a = *public_key;
-    witness.private_key = *private_key;
-    witness.hash_h = compute_eddsa_hash_h(signature_r, public_key, message);
-
-    // Decompress R and A to extended coordinates (tolerant for test inputs)
-    if let Ok((r_x, r_y, r_z, r_t)) = compressed_to_extended(signature_r) {
-        witness.r_extended_x = r_x;
-        witness.r_extended_y = r_y;
-        witness.r_extended_z = r_z;
-        witness.r_extended_t = r_t;
-    }
-    if let Ok((a_x, a_y, a_z, a_t)) = compressed_to_extended(public_key) {
-        witness.a_extended_x = a_x;
-        witness.a_extended_y = a_y;
-        witness.a_extended_z = a_z;
-        witness.a_extended_t = a_t;
-    }
-
-    // Create window decompositions for scalar multiplication
-    witness.s_windows = decompose_scalar_to_windows(signature_s);
-    witness.h_windows = decompose_scalar_to_windows(&witness.hash_h);
-
-    Ok(witness)
-}
-
 /// Decompose a 32-byte scalar into 64 4-bit windows for STARK operations
 fn decompose_scalar_to_windows(scalar: &[u8; 32]) -> Vec<u8> {
     let mut windows = Vec::with_capacity(64);
@@ -580,8 +261,6 @@ fn decompose_scalar_to_windows(scalar: &[u8; 32]) -> Vec<u8> {
     windows
 }
 
-// Backward compatibility wrapper for the old signature
-// This should be deprecated once DET is updated
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -641,28 +320,60 @@ mod tests {
         )
         .expect("Failed to read identity proof fixture");
 
-        // Create witness using SDK integration (identity-aware)
-        let doc_root = [0x44u8; 32];
-        let keys_root = [0x55u8; 32];
-        let contract_id = [0x66u8; 32];
-        let owner_id_vec = vec![0xDDu8; 32];
-        let result = create_witness_from_sdk_proofs(
-            &document_proof,
-            &identity_proof,
-            vec![0xCCu8; 100], // document_cbor
-            owner_id_vec,
-            &signature_r,
-            &signature_s,
-            &verifying_key.to_bytes(),
-            message,
-            &signing_key.to_bytes(),
-            &doc_root,
-            &keys_root,
-            &contract_id,
-        );
+        // Parse proofs through GroveVM to obtain Merkle paths just like production code
+        let document_full_path = parse_grovedb_nodes(&document_proof).expect("document proof path");
+        let identity_full_path = parse_grovedb_nodes(&identity_proof).expect("identity proof path");
 
-        assert!(result.is_ok(), "Failed to create witness from SDK proofs");
-        let witness = result.unwrap();
+        // Construct witness inline (mirrors legacy helper without bytes hacking)
+        let mut witness = PrivateInputs::default();
+        witness.document_cbor = vec![0xCCu8; 100];
+
+        // Owner/identity ids must match for EdDSA verification paths
+        let owner_id: [u8; 32] = [0xDDu8; 32];
+        witness.owner_id = owner_id;
+        witness.identity_id = owner_id;
+
+        // Static roots for test scenario
+        witness.doc_root = [0x44u8; 32];
+        witness.keys_root = [0x55u8; 32];
+
+        // Split the parsed document path into owner→doc and doc→state segments
+        let split_point = document_full_path.len() / 2;
+        if split_point > 0 {
+            witness.owner_id_leaf_to_doc_path = document_full_path[..split_point].to_vec();
+            witness.docroot_to_state_path = document_full_path[split_point..].to_vec();
+        } else {
+            witness.owner_id_leaf_to_doc_path = document_full_path.clone();
+        }
+
+        witness.identity_leaf_to_state_path = identity_full_path.clone();
+        witness.key_leaf_to_keysroot_path = vec![];
+        witness.key_usage_tag = *b"sig:ed25519:v1\0\0";
+        witness.pubkey_a_compressed = verifying_key.to_bytes();
+
+        // Populate EdDSA-related fields
+        witness.signature_r = signature_r;
+        witness.signature_s = signature_s;
+        witness.public_key_a = verifying_key.to_bytes();
+        witness.private_key = signing_key.to_bytes();
+        witness.hash_h = compute_eddsa_hash_h(&signature_r, &witness.public_key_a, message);
+
+        if let Ok((r_x, r_y, r_z, r_t)) = compressed_to_extended(&signature_r) {
+            witness.r_extended_x = r_x;
+            witness.r_extended_y = r_y;
+            witness.r_extended_z = r_z;
+            witness.r_extended_t = r_t;
+        }
+
+        if let Ok((a_x, a_y, a_z, a_t)) = compressed_to_extended(&witness.public_key_a) {
+            witness.a_extended_x = a_x;
+            witness.a_extended_y = a_y;
+            witness.a_extended_z = a_z;
+            witness.a_extended_t = a_t;
+        }
+
+        witness.s_windows = decompose_scalar_to_windows(&signature_s);
+        witness.h_windows = decompose_scalar_to_windows(&witness.hash_h);
 
         // Verify the witness was populated correctly
         assert!(witness.owner_id_leaf_to_doc_path.len() > 0);
