@@ -3,9 +3,7 @@
 #[cfg(test)]
 mod prop {
     use curve25519_dalek::{
-        constants::ED25519_BASEPOINT_TABLE,
-        edwards::{CompressedEdwardsY, EdwardsPoint},
-        scalar::Scalar,
+        constants::ED25519_BASEPOINT_TABLE, edwards::EdwardsPoint, scalar::Scalar,
     };
     use rand_chacha::ChaCha20Rng;
     use rand_core::{RngCore, SeedableRng};

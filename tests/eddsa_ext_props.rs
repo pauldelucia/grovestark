@@ -1,6 +1,6 @@
-use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
+use curve25519_dalek::edwards::EdwardsPoint;
 use curve25519_dalek::scalar::Scalar;
-use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
+use rand::{rngs::StdRng, RngCore, SeedableRng};
 
 use grovestark::compressed_to_extended;
 use grovestark::crypto::fe25519_digits as fe;
@@ -39,9 +39,9 @@ fn check_invariants(p: &ExtPoint) {
 }
 
 // A tiny helper to turn dalek point into your ExtPoint with Z=1, T=X*Y
-fn to_extpoint_from_dalek(P: &EdwardsPoint) -> ExtPoint {
+fn to_extpoint_from_dalek(p: &EdwardsPoint) -> ExtPoint {
     // Decompress from dalek's compressed form to stay consistent with your path:
-    let enc = P.compress().to_bytes();
+    let enc = p.compress().to_bytes();
     let (x_bytes, y_bytes, z_bytes, t_bytes) = compressed_to_extended(&enc).expect("decompress");
 
     // Convert bytes back to limbs
@@ -60,8 +60,8 @@ fn ed_neg_add_identity() {
         let mut scalar_bytes = [0u8; 32];
         rng.fill_bytes(&mut scalar_bytes);
         let s = Scalar::from_bytes_mod_order(scalar_bytes);
-        let P = &s * &EdwardsPoint::default(); // some generator (dalek's default is basepoint)
-        let p = to_extpoint_from_dalek(&P);
+        let p = &s * &EdwardsPoint::default(); // some generator (dalek's default is basepoint)
+        let p = to_extpoint_from_dalek(&p);
         let m = ed_neg(&p);
         let o = ed_add(&p, &m);
 
@@ -85,8 +85,8 @@ fn dalek_roundtrip_invariants() {
         let mut scalar_bytes = [0u8; 32];
         rng.fill_bytes(&mut scalar_bytes);
         let s = Scalar::from_bytes_mod_order(scalar_bytes);
-        let P = &s * &EdwardsPoint::default();
-        let p = to_extpoint_from_dalek(&P);
+        let p = &s * &EdwardsPoint::default();
+        let p = to_extpoint_from_dalek(&p);
         check_invariants(&p);
     }
 }

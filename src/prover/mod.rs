@@ -35,7 +35,7 @@ impl GroveSTARK {
         // Compute public outputs
         let public_outputs = self.compute_outputs(&witness, &public)?;
 
-        // Generate real STARK proof using winterfell
+        // Generate STARK proof using winterfell
         let proof_bytes = crate::stark_winterfell::generate_proof(&witness, &public, &self.config)?;
 
         // The proof bytes contain the complete winterfell STARK proof
@@ -87,8 +87,7 @@ impl GroveSTARK {
         self.verify_public_outputs(&proof.public_outputs, public_inputs)?;
         self.verify_trace_commitment(proof)?;
 
-        // For the actual STARK verification, use winterfell's verifier
-        // The complete winterfell proof bytes are stored in fri_proof.final_polynomial
+        // Extract the proof bytes from the FRI proof structure
         let proof_bytes = &proof.fri_proof.final_polynomial;
 
         // Verify proof size is reasonable (STARK proofs are typically 50-200KB)
@@ -106,7 +105,7 @@ impl GroveSTARK {
             )));
         }
 
-        // Use winterfell's verification with the provided public_inputs
+        // Now verify the STARK proof using winterfell
         let verification_result =
             crate::stark_winterfell::verify_proof(proof_bytes, public_inputs, &self.config)?;
 

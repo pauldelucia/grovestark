@@ -43,7 +43,6 @@ fn test_simple_merkle_path() {
     let mut root_input = [0u8; 64];
     root_input[0..32].copy_from_slice(&n01);
     root_input[32..64].copy_from_slice(&n23);
-    let root = Blake3Hasher::hash(&root_input);
 
     // We're not using this simple tree anymore, but keeping for reference
     println!("Note: Using real state root from DET_PROOF_LOGS, not computed tree");

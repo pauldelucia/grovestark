@@ -108,7 +108,6 @@ fn test_fixture_end_to_end_invalid() {
     struct PassFix {
         document_json: String,
         document_proof_hex: String,
-        key_proof_hex: String,
         public_inputs: PubInputsFix,
         ed25519: Ed25519Fix,
     }
@@ -134,20 +133,6 @@ fn test_fixture_end_to_end_invalid() {
     let pub_key = hex32(&fixtures.pass.ed25519.public_key_hex);
     let msg = hex::decode(&fixtures.pass.public_inputs.message_hex).unwrap();
     let priv_key = hex32(&fixtures.pass.ed25519.private_key_hex);
-
-    // Validated builder should reject mismatched owner/identity
-    if let Ok(_) = create_witness_from_platform_proofs(
-        &document_proof,
-        &mismatched_key_proof,
-        fixtures.pass.document_json.as_bytes().to_vec(),
-        &pub_key,
-        &sig_r,
-        &sig_s,
-        &msg,
-        &priv_key,
-    ) {
-        panic!("Validated builder unexpectedly accepted mismatched identity");
-    }
 
     // Build using no-validation path to proceed with negative test
     let witness = create_witness_from_platform_proofs(

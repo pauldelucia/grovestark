@@ -118,12 +118,9 @@ mod tests {
         let my = FieldElement::new(6);
 
         let initial_a = state[0];
-        let initial_b = state[1];
 
         blake3_g_function(&tables, &mut state, 0, 1, 2, 3, mx, my);
 
-        // First operation should be a = a + b + mx
-        let expected_first_a = initial_a + initial_b + mx;
         // The value will be modified by later operations, but it should have gone through this
         assert_ne!(state[0], initial_a);
     }

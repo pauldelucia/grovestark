@@ -129,12 +129,12 @@ fn test_hybrid_verification_with_real_crypto() {
     println!("✅ Maximum privacy proof generated (with ring signatures)");
 
     // Test standard privacy
-    let proof_std =
+    let _proof_std =
         HybridVerifier::prove_ownership(&witness, &public, PrivacyLevel::Standard).unwrap();
     println!("✅ Standard privacy proof generated");
 
     // Test minimal privacy
-    let proof_min =
+    let _proof_min =
         HybridVerifier::prove_ownership(&witness, &public, PrivacyLevel::Minimal).unwrap();
     println!("✅ Minimal privacy proof generated");
 

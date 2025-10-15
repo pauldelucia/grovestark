@@ -278,13 +278,6 @@ fn test_parse_and_use_real_merkle_paths() {
     )
     .expect("Failed to create witness");
 
-    // Extract state root
-    let state_root = {
-        let mut root = [0u8; 32];
-        root.copy_from_slice(&doc_proof[2..34]);
-        root
-    };
-
     let public_inputs = public_inputs;
 
     println!("\n🔨 Generating proof with real Merkle paths...");

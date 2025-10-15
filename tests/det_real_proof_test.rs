@@ -183,28 +183,6 @@ fn create_det_public_inputs() -> PublicInputs {
     }
 }
 
-fn compute_hash_h(r: &[u8; 32], a: &[u8; 32], m: &[u8; 32]) -> [u8; 32] {
-    use sha2::{Digest, Sha512};
-
-    // Compute SHA-512(R || A || M)
-    let mut hasher = Sha512::new();
-    hasher.update(r);
-    hasher.update(a);
-    hasher.update(m);
-    let hash_512 = hasher.finalize();
-
-    // Reduce modulo L (curve order)
-    // L = 2^252 + 27742317777372353535851937790883648493
-    // For now, just take the first 32 bytes and clear high bits
-    let mut hash_h = [0u8; 32];
-    hash_h.copy_from_slice(&hash_512[0..32]);
-
-    // Clear the high 3 bits to ensure it's less than L
-    hash_h[31] &= 0x1F;
-
-    hash_h
-}
-
 fn hex_to_array32(hex_str: &str) -> [u8; 32] {
     let bytes = hex::decode(hex_str).expect("Invalid hex string");
     let mut array = [0u8; 32];

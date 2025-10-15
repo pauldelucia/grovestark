@@ -1,4 +1,4 @@
-#![cfg(feature = "winterfell_bug_reproducers")]
+#![cfg(feature = "must_fail_test")]
 /// Minimal reproducer for Winterfell 41-constraint bug
 /// Per GUIDANCE.md Section Test B: 41 zero constraints fail verification
 ///
