@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Paul DeLucia"]
 description = "Custom STARK prover for Dash Platform GroveDB proofs"
 license = "MIT"
-repository = "https://github.com/dashpay/grovestark"
+repository = "https://github.com/pauldelucia/grovestark"
 keywords = ["stark", "zero-knowledge", "cryptography", "dash", "grovedb"]
 categories = ["cryptography"]
 
