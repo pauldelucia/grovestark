@@ -128,8 +128,6 @@ pub fn create_placeholder_eddsa_witness() -> Result<PrivateInputs> {
     base_witness.identity_id = base_witness.owner_id;
     base_witness.doc_root = [0x44; 32];
     base_witness.keys_root = [0x55; 32];
-    base_witness.private_key = [6u8; 32];
-
     augment_eddsa_witness(&base_witness)
 }
 

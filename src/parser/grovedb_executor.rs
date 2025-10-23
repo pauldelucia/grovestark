@@ -381,7 +381,7 @@ pub fn parse_proof_operations(proof_bytes: &[u8]) -> Result<Vec<Op>> {
     // Look for operation codes (0x01-0x13)
     while start_pos < proof_bytes.len() && start_pos < 100 {
         let byte = proof_bytes[start_pos];
-        if (byte >= 0x01 && byte <= 0x07) || (byte >= 0x10 && byte <= 0x13) {
+        if (0x01..=0x07).contains(&byte) || (0x10..=0x13).contains(&byte) {
             // Check if this looks like a valid operation
             if byte == 0x01 && start_pos + 32 < proof_bytes.len() {
                 // Could be Push(Hash) - check if followed by reasonable data
@@ -561,7 +561,7 @@ fn path_from_ops(ops: &[grovedb_merk::proofs::Op]) -> Vec<MerkleNode> {
 
         if child.contains_leaf && !parent.contains_leaf {
             if let Some(sib_hash) = parent.hash {
-                let is_left = attaches_left == false;
+                let is_left = !attaches_left;
                 path.push(MerkleNode {
                     hash: sib_hash,
                     is_left,
@@ -569,7 +569,7 @@ fn path_from_ops(ops: &[grovedb_merk::proofs::Op]) -> Vec<MerkleNode> {
             }
         } else if parent.contains_leaf && !child.contains_leaf {
             if let Some(sib_hash) = child.hash {
-                let is_left = attaches_left == true;
+                let is_left = attaches_left;
                 path.push(MerkleNode {
                     hash: sib_hash,
                     is_left,
@@ -634,7 +634,7 @@ pub fn parse_grovedb_nodes(proof_bytes: &[u8]) -> Result<Vec<MerkleNode>> {
     );
 
     // Decode layered GroveDB proof, then parse inner merk_proof ops
-    let layered_decoded: crate::Result<grovedb::operations::proof::GroveDBProof> = (|| {
+    let layered_decoded: crate::Result<grovedb::operations::proof::GroveDBProof> = {
         use bincode;
         let cfg = bincode::config::standard()
             .with_big_endian()
@@ -642,7 +642,7 @@ pub fn parse_grovedb_nodes(proof_bytes: &[u8]) -> Result<Vec<MerkleNode>> {
         bincode::decode_from_slice::<grovedb::operations::proof::GroveDBProof, _>(proof_bytes, cfg)
             .map(|(p, _)| p)
             .map_err(|e| crate::Error::Parser(format!("Layered decode failed (bincode2): {}", e)))
-    })();
+    };
 
     if let Ok(layered) = layered_decoded {
         println!("[GroveDB Executor] Layered proof decode (bincode2) succeeded");

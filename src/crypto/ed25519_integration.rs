@@ -88,12 +88,16 @@ pub fn derive_public_key(private_key: &[u8; 32]) -> [u8; 32] {
 }
 
 /// Augment witness with ed25519-dalek computed values
-pub fn augment_witness_with_eddsa(witness: &mut PrivateInputs, message: &[u8]) -> Result<()> {
-    // Derive public key from private key
-    witness.public_key_a = derive_public_key(&witness.private_key);
+pub fn augment_witness_with_eddsa(
+    witness: &mut PrivateInputs,
+    private_key: &[u8; 32],
+    message: &[u8],
+) -> Result<()> {
+    // Derive public key from supplied private key
+    witness.public_key_a = derive_public_key(private_key);
 
     // Sign the message to get R and s
-    let (r, s) = sign_message(&witness.private_key, message)?;
+    let (r, s) = sign_message(private_key, message)?;
     witness.signature_r = r;
     witness.signature_s = s;
 
@@ -187,11 +191,10 @@ mod tests {
     #[test]
     fn test_witness_augmentation() {
         let mut witness = PrivateInputs::default();
-        witness.private_key = [42u8; 32];
-
         let message = b"test message for signing";
+        let private_key = [42u8; 32];
 
-        augment_witness_with_eddsa(&mut witness, message).unwrap();
+        augment_witness_with_eddsa(&mut witness, &private_key, message).unwrap();
 
         // Should have populated all EdDSA fields
         assert_ne!(witness.public_key_a, [0u8; 32]);

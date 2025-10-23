@@ -4,7 +4,7 @@
 //! ensuring 100% production readiness with no placeholders.
 
 use grovestark::crypto::ed25519::decompress::augment_witness_with_extended;
-use grovestark::crypto::{Blake3Hasher, HybridVerifier, PrivacyLevel};
+use grovestark::crypto::Blake3Hasher;
 use grovestark::error_handling::{
     CircuitBreaker, CircuitBreakerConfig, RetryConfig, RetryExecutor,
 };
@@ -31,8 +31,8 @@ fn test_config() -> STARKConfig {
     }
 }
 
-/// Generate valid test witness
-fn generate_test_witness() -> (PrivateInputs, PublicInputs) {
+/// Generate valid test witness and return the associated signing key
+fn generate_test_witness_with_key() -> (PrivateInputs, PublicInputs, [u8; 32]) {
     // Use valid EdDSA test data that verifies correctly (freshly generated)
     let signature_r = [
         0x18, 0xac, 0x08, 0x19, 0x28, 0xc3, 0x9a, 0xee, 0x8f, 0xa5, 0x29, 0x91, 0x6c, 0x07, 0x71,
@@ -106,7 +106,6 @@ fn generate_test_witness() -> (PrivateInputs, PublicInputs) {
             is_left: false,
         }],
         identity_id: *b"test_owner_id_67890_dash_platfor", // Must match owner_id
-        private_key,
         signature_r,
         signature_s,
         public_key_a,
@@ -141,14 +140,20 @@ fn generate_test_witness() -> (PrivateInputs, PublicInputs) {
     let augmented_witness =
         augment_eddsa_witness(&witness).expect("Failed to augment EdDSA witness");
 
-    (augmented_witness, public)
+    (augmented_witness, public, private_key)
+}
+
+/// Generate valid test witness (without exposing the private key)
+fn generate_test_witness() -> (PrivateInputs, PublicInputs) {
+    let (witness, public, _private_key) = generate_test_witness_with_key();
+    (witness, public)
 }
 
 #[test]
 fn test_end_to_end_proof_generation_and_verification() {
     let config = test_config();
     let stark = GroveSTARK::with_config(config.clone());
-    let (witness, public) = generate_test_witness();
+    let (witness, public, _private_key) = generate_test_witness_with_key();
 
     // Generate proof
     let proof = stark.prove(witness, public.clone()).unwrap();
@@ -237,24 +242,6 @@ fn test_blake3_hashing() {
     // Different data should produce different hash
     let hash3 = Blake3Hasher::hash(b"different data");
     assert_ne!(hash, hash3, "Different data should produce different hash");
-}
-
-#[test]
-fn test_hybrid_verification_with_privacy_levels() {
-    let (witness, public) = generate_test_witness();
-
-    // Test Standard privacy level
-    let proof_standard =
-        HybridVerifier::prove_ownership(&witness, &public, PrivacyLevel::Standard).unwrap();
-
-    assert_eq!(proof_standard.privacy_level, PrivacyLevel::Standard);
-    assert!(proof_standard.signature_component.ring_signature.is_none());
-
-    // Test Minimal privacy level
-    let proof_minimal =
-        HybridVerifier::prove_ownership(&witness, &public, PrivacyLevel::Minimal).unwrap();
-
-    assert_eq!(proof_minimal.privacy_level, PrivacyLevel::Minimal);
 }
 
 #[test]

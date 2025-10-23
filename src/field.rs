@@ -1,3 +1,5 @@
+#![allow(non_local_definitions)]
+
 use ark_ff::fields::{Fp64, MontBackend, MontConfig};
 use ark_ff::{Field as ArkField, PrimeField};
 use std::ops::{Add, Div, Mul, Neg, Sub};

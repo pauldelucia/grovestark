@@ -146,7 +146,6 @@ pub fn create_witness_from_platform_proofs(
     signature_r: &[u8; 32],
     signature_s: &[u8; 32],
     message: &[u8],
-    private_key: &[u8; 32],
 ) -> crate::Result<PrivateInputs> {
     let (docroot_to_state_path, owner_leaf_path) =
         crate::parser::parse_grovedb_proof_full(document_proof)
@@ -184,7 +183,6 @@ pub fn create_witness_from_platform_proofs(
     witness.public_key_a = *public_key;
     witness.pubkey_a_compressed = *public_key;
     witness.key_usage_tag = *b"sig:ed25519:v1\0\0";
-    witness.private_key = *private_key;
 
     // Compute EdDSA hash h = SHA-512(R || A || M) mod L
     witness.hash_h = compute_eddsa_hash_h(signature_r, public_key, message);
@@ -208,7 +206,7 @@ pub fn create_witness_from_platform_proofs(
     witness.h_windows = decompose_scalar_to_windows(&witness.hash_h);
 
     // Augment witness with EdDSA range check data
-    let augmented_witness = augment_eddsa_witness(&witness).unwrap_or_else(|_| witness);
+    let augmented_witness = augment_eddsa_witness(&witness).unwrap_or(witness);
 
     Ok(augmented_witness)
 }
@@ -355,7 +353,6 @@ mod tests {
         witness.signature_r = signature_r;
         witness.signature_s = signature_s;
         witness.public_key_a = verifying_key.to_bytes();
-        witness.private_key = signing_key.to_bytes();
         witness.hash_h = compute_eddsa_hash_h(&signature_r, &witness.public_key_a, message);
 
         if let Ok((r_x, r_y, r_z, r_t)) = compressed_to_extended(&signature_r) {

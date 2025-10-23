@@ -3,73 +3,78 @@
 //! This example shows how to use GroveSTARK with raw proofs from the Dash SDK,
 //! where document and identity proofs are provided separately.
 
-use ed25519_dalek::{Signer, SigningKey};
 use grovestark::{create_witness_from_platform_proofs, GroveSTARK, PublicInputs, STARKConfig};
-use rand::rngs::OsRng;
-use std::time::{SystemTime, UNIX_EPOCH};
+use hex;
+use serde::Deserialize;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 GroveSTARK SDK Integration Example");
     println!("=====================================\n");
 
-    // Step 1: Generate Ed25519 keypair and signature (normally from SDK)
-    println!("Step 1: Generating EdDSA signature...");
-    let signing_key = SigningKey::generate(&mut OsRng);
-    let verifying_key = signing_key.verifying_key();
-    let message = b"Document ownership challenge";
-    let signature = signing_key.sign(message);
+    // Step 1: Load real fixture data (mirrors integration tests)
+    println!("Step 1: Loading proofs from PASS_AND_FAIL fixtures...");
 
-    let signature_bytes = signature.to_bytes();
-    let mut signature_r = [0u8; 32];
-    let mut signature_s = [0u8; 32];
-    signature_r.copy_from_slice(&signature_bytes[0..32]);
-    signature_s.copy_from_slice(&signature_bytes[32..64]);
+    #[derive(Deserialize)]
+    struct Ed25519Fix {
+        public_key_hex: String,
+        signature_r_hex: String,
+        signature_s_hex: String,
+    }
 
-    println!("  ✓ Generated Ed25519 signature");
+    #[derive(Deserialize)]
+    struct PubInputsFix {
+        state_root_hex: String,
+        contract_id_hex: String,
+        message_hex: String,
+        timestamp: u64,
+    }
 
-    // Step 2: Create mock SDK proofs (in production, these come from SDK)
-    println!("\nStep 2: Creating mock SDK proofs...");
+    #[derive(Deserialize)]
+    struct PassFix {
+        document_json: String,
+        document_proof_hex: String,
+        key_proof_hex: String,
+        public_inputs: PubInputsFix,
+        ed25519: Ed25519Fix,
+    }
 
-    // Document proof: Raw Merk operations
-    // Format: [op_code, data...]
-    // 0x01 = Push, 0x02 = Parent, 0x03 = Child
-    let mut document_proof = Vec::new();
-    // First node: Push hash + Parent (left sibling)
-    document_proof.push(0x01); // Push operation
-    document_proof.extend_from_slice(&[0x11u8; 32]); // Hash
-    document_proof.push(0x02); // Parent operation
-                               // Second node: Push hash only (right sibling)
-    document_proof.push(0x01); // Push operation
-    document_proof.extend_from_slice(&[0x22u8; 32]); // Hash
+    #[derive(Deserialize)]
+    struct Fixtures {
+        pass: PassFix,
+    }
 
-    // Identity proof: Raw Merk operations
-    let mut identity_proof = Vec::new();
-    // Single node: Push hash (right sibling)
-    identity_proof.push(0x01); // Push operation
-    identity_proof.extend_from_slice(&[0x33u8; 32]); // Hash
+    fn hex32(s: &str) -> [u8; 32] {
+        let bytes = hex::decode(s).expect("Invalid hex");
+        assert_eq!(bytes.len(), 32, "expected 32-byte hex");
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(&bytes);
+        arr
+    }
 
-    println!(
-        "  ✓ Created document proof ({} bytes)",
-        document_proof.len()
-    );
-    println!(
-        "  ✓ Created identity proof ({} bytes)",
-        identity_proof.len()
-    );
+    let fixtures: Fixtures =
+        serde_json::from_str(include_str!("../tests/fixtures/PASS_AND_FAIL.json"))?;
 
-    // Step 3: Create witness using SDK integration function
-    println!("\nStep 3: Creating witness from SDK proofs...");
+    let doc_proof = hex::decode(&fixtures.pass.document_proof_hex)?;
+    let key_proof = hex::decode(&fixtures.pass.key_proof_hex)?;
+    let sig_r = hex32(&fixtures.pass.ed25519.signature_r_hex);
+    let sig_s = hex32(&fixtures.pass.ed25519.signature_s_hex);
+    let public_key = hex32(&fixtures.pass.ed25519.public_key_hex);
+    let message = hex::decode(&fixtures.pass.public_inputs.message_hex)?;
 
-    // Additional required values for the simplified 2-proof path
+    println!("  ✓ Loaded document proof ({} bytes)", doc_proof.len());
+    println!("  ✓ Loaded identity proof ({} bytes)", key_proof.len());
+
+    // Step 2: Create witness using real proofs
+    println!("\nStep 2: Creating witness from fixture proofs...");
+
     let witness = create_witness_from_platform_proofs(
-        &document_proof,
-        &identity_proof,
-        vec![0xDDu8; 100], // Document JSON/CBOR data
-        &signature_r,
-        &signature_s,
-        &verifying_key.to_bytes(),
-        message,
-        &signing_key.to_bytes(),
+        &doc_proof,
+        &key_proof,
+        fixtures.pass.document_json.as_bytes().to_vec(),
+        &public_key,
+        &sig_r,
+        &sig_s,
+        &message,
     )?;
 
     println!("  ✓ Created witness with:");
@@ -92,13 +97,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let prover = GroveSTARK::with_config(config);
 
     let public_inputs = PublicInputs {
-        state_root: [0xFFu8; 32],
-        contract_id: [0xAAu8; 32],
-        message_hash: [0xBBu8; 32],
-        timestamp: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs(),
+        state_root: hex32(&fixtures.pass.public_inputs.state_root_hex),
+        contract_id: hex32(&fixtures.pass.public_inputs.contract_id_hex),
+        message_hash: hex32(&fixtures.pass.public_inputs.message_hex),
+        timestamp: fixtures.pass.public_inputs.timestamp,
     };
 
     println!("  ⏳ This may take a moment...");

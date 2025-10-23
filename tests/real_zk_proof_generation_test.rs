@@ -15,7 +15,6 @@ fn load_pass_fixture() -> (
     [u8; 32],     // sig_r
     [u8; 32],     // sig_s
     Vec<u8>,      // message bytes
-    [u8; 32],     // private_key
     PublicInputs, // public inputs
 ) {
     #[derive(serde::Deserialize)]
@@ -23,7 +22,6 @@ fn load_pass_fixture() -> (
         public_key_hex: String,
         signature_r_hex: String,
         signature_s_hex: String,
-        private_key_hex: String,
     }
     #[derive(serde::Deserialize)]
     struct PubInputsFix {
@@ -59,7 +57,6 @@ fn load_pass_fixture() -> (
     let pubkey = hex32(&fixtures.pass.ed25519.public_key_hex);
     let sig_r = hex32(&fixtures.pass.ed25519.signature_r_hex);
     let sig_s = hex32(&fixtures.pass.ed25519.signature_s_hex);
-    let private_key = hex32(&fixtures.pass.ed25519.private_key_hex);
     let message = hex::decode(&fixtures.pass.public_inputs.message_hex).unwrap();
     let public_inputs = PublicInputs {
         state_root: hex32(&fixtures.pass.public_inputs.state_root_hex),
@@ -76,7 +73,6 @@ fn load_pass_fixture() -> (
         sig_r,
         sig_s,
         message,
-        private_key,
         public_inputs,
     )
 }
@@ -90,17 +86,8 @@ fn test_generate_zk_proof_with_real_data() {
     println!("\n=== Testing ZK Proof Generation with Real SDK Data ===\n");
 
     // Load real proof bytes and inputs from fixtures
-    let (
-        doc_proof,
-        id_proof,
-        document_json,
-        pubkey,
-        sig_r,
-        sig_s,
-        message,
-        private_key,
-        public_inputs,
-    ) = load_pass_fixture();
+    let (doc_proof, id_proof, document_json, pubkey, sig_r, sig_s, message, public_inputs) =
+        load_pass_fixture();
 
     println!("✅ Loaded real proof fixtures:");
     println!("   Document proof: {} bytes", doc_proof.len());
@@ -115,7 +102,6 @@ fn test_generate_zk_proof_with_real_data() {
         &sig_r,
         &sig_s,
         &message,
-        &private_key,
     );
 
     assert!(
@@ -229,17 +215,8 @@ fn test_parse_and_use_real_merkle_paths() {
     println!("\n=== Testing Merkle Path Extraction from Real Data ===\n");
 
     // Load and parse the real proofs
-    let (
-        doc_proof,
-        id_proof,
-        document_json,
-        pubkey,
-        sig_r,
-        sig_s,
-        message,
-        private_key,
-        public_inputs,
-    ) = load_pass_fixture();
+    let (doc_proof, id_proof, document_json, pubkey, sig_r, sig_s, message, public_inputs) =
+        load_pass_fixture();
 
     // Parse the Merkle paths
     let doc_nodes = parse_grovedb_proof(&doc_proof).expect("Failed to parse document proof");
@@ -274,7 +251,6 @@ fn test_parse_and_use_real_merkle_paths() {
         &sig_r,
         &sig_s,
         &message,
-        &private_key,
     )
     .expect("Failed to create witness");
 
@@ -342,17 +318,8 @@ fn test_zk_proof_with_metadata() {
     println!("   Security level extracted: {}", security_level);
 
     // Load the actual proof files and inputs from fixtures
-    let (
-        doc_proof,
-        id_proof,
-        document_json,
-        pubkey,
-        sig_r,
-        sig_s,
-        message,
-        private_key,
-        public_inputs,
-    ) = load_pass_fixture();
+    let (doc_proof, id_proof, document_json, pubkey, sig_r, sig_s, message, public_inputs) =
+        load_pass_fixture();
 
     // Security level already extracted above
 
@@ -365,7 +332,6 @@ fn test_zk_proof_with_metadata() {
         &sig_r,
         &sig_s,
         &message,
-        &private_key,
     )
     .expect("Failed to create witness");
 

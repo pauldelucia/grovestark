@@ -88,7 +88,7 @@ pub fn parse_grovedb_proof_full(raw_proof: &[u8]) -> Result<(Vec<MerkleNode>, Ve
             };
             if child.contains_leaf && !parent.contains_leaf {
                 if let Some(sib_hash) = parent.hash {
-                    let is_left = attaches_left == false;
+                    let is_left = !attaches_left;
                     path.push(MerkleNode {
                         hash: sib_hash,
                         is_left,
@@ -96,7 +96,7 @@ pub fn parse_grovedb_proof_full(raw_proof: &[u8]) -> Result<(Vec<MerkleNode>, Ve
                 }
             } else if parent.contains_leaf && !child.contains_leaf {
                 if let Some(sib_hash) = child.hash {
-                    let is_left = attaches_left == true;
+                    let is_left = attaches_left;
                     path.push(MerkleNode {
                         hash: sib_hash,
                         is_left,

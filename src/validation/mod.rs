@@ -11,12 +11,6 @@ pub use public_inputs::{
 /// Validate witness structure
 pub fn validate_witness(witness: &PrivateInputs) -> Result<()> {
     // Check that required fields are non-zero
-    if witness.private_key == [0u8; 32] {
-        return Err(Error::InvalidInput(
-            "Private key cannot be zero".to_string(),
-        ));
-    }
-
     if witness.signature_r == [0u8; 32] {
         return Err(Error::InvalidInput(
             "Signature R cannot be zero".to_string(),

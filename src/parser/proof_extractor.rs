@@ -307,38 +307,30 @@ pub fn extract_merkle_path_from_ops(ops: &[MerkOp]) -> Vec<(bool, [u8; 32])> {
             }
             MerkOp::Parent => {
                 // Parent means the previous pushed node is a LEFT child
-                if let Some((hash_opt, _)) = &mut pending_node {
-                    if let Some(hash) = hash_opt {
-                        path.push((true, *hash)); // LEFT sibling
-                        pending_node = None;
-                    }
+                if let Some((Some(hash), _)) = &mut pending_node {
+                    path.push((true, *hash)); // LEFT sibling
+                    pending_node = None;
                 }
             }
             MerkOp::Child => {
                 // Child means the previous pushed node is a RIGHT child
-                if let Some((hash_opt, _)) = &mut pending_node {
-                    if let Some(hash) = hash_opt {
-                        path.push((false, *hash)); // RIGHT sibling
-                        pending_node = None;
-                    }
+                if let Some((Some(hash), _)) = &mut pending_node {
+                    path.push((false, *hash)); // RIGHT sibling
+                    pending_node = None;
                 }
             }
             MerkOp::ParentInverted => {
                 // ParentInverted means the previous node is a RIGHT child
-                if let Some((hash_opt, _)) = &mut pending_node {
-                    if let Some(hash) = hash_opt {
-                        path.push((false, *hash)); // RIGHT sibling
-                        pending_node = None;
-                    }
+                if let Some((Some(hash), _)) = &mut pending_node {
+                    path.push((false, *hash)); // RIGHT sibling
+                    pending_node = None;
                 }
             }
             MerkOp::ChildInverted => {
                 // ChildInverted means the previous node is a LEFT child
-                if let Some((hash_opt, _)) = &mut pending_node {
-                    if let Some(hash) = hash_opt {
-                        path.push((true, *hash)); // LEFT sibling
-                        pending_node = None;
-                    }
+                if let Some((Some(hash), _)) = &mut pending_node {
+                    path.push((true, *hash)); // LEFT sibling
+                    pending_node = None;
                 }
             }
         }

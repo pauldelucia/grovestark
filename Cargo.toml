@@ -115,11 +115,6 @@ tr = "test --release -- --nocapture"
 tr-ci = "test --release -q"
 
 [[bench]]
-name = "comprehensive_benchmarks"
-harness = false
-required-features = ["bench"]
-
-[[bench]]
 name = "quick_benchmarks"
 harness = false
 required-features = ["bench"]

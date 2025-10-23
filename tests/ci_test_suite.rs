@@ -1,4 +1,4 @@
-/// CI Test Suite - Following GUIDANCE.md recommendations
+/// CI Test Suite
 /// These tests should be run in CI to ensure STARK soundness and correctness
 use grovestark::*;
 
@@ -111,7 +111,6 @@ fn ci_test_3_end_to_end_validity() {
         public_key_hex: String,
         signature_r_hex: String,
         signature_s_hex: String,
-        private_key_hex: String,
     }
     #[derive(serde::Deserialize)]
     struct PubInputsFix {
@@ -153,7 +152,6 @@ fn ci_test_3_end_to_end_validity() {
     let sig_s = hex32(&fixtures.pass.ed25519.signature_s_hex);
     let pubkey = hex32(&fixtures.pass.ed25519.public_key_hex);
     let msg = hex::decode(&fixtures.pass.public_inputs.message_hex).unwrap();
-    let privkey = hex32(&fixtures.pass.ed25519.private_key_hex);
 
     // Build witness using the validated builder (enforces owner==identity via GroveVM)
     let witness = create_witness_from_platform_proofs(
@@ -164,7 +162,6 @@ fn ci_test_3_end_to_end_validity() {
         &sig_r,
         &sig_s,
         &msg,
-        &privkey,
     )
     .expect("fixture witness build");
 
