@@ -10,11 +10,8 @@ Run Tests
   - `cargo test --release -q`
 
 - Common targets:
-  - CI suite: `cargo test --release -q --test ci_test_suite -- --nocapture`
-  - Comprehensive: `cargo test --release -q --test comprehensive_test_suite -- --nocapture`
-  - Preflight: `cargo test --release -q --test test_preflight_checker -- --nocapture`
-  - Testnet: `cargo test --release -q --test testnet_proof_generation_test -- --nocapture`
-  - Simple testnet: `cargo test --release -q --test testnet_proof_simple -- --nocapture`
+- Integration: `cargo test --release -q --test integration_test -- --nocapture`
+- Real fixtures: `cargo test --release -q --test real_zk_proof_generation_test -- --nocapture`
   - Verification rejection: `cargo test --release -q --test verification_rejection_test -- --nocapture`
 
 Fixtures
@@ -54,5 +51,6 @@ Notes
 -----
 
 - Many heavy tests are release‑only or optimized for release; expect `--release` to be required.
-- The old “hybrid” wrapper is removed; all tests rely on the in‑circuit challenge.
+- With the suite slimmed down to core coverage, the remaining tests focus on end-to-end proof
+  generation/verification with real fixtures.
 - EdDSA (Ed25519) is the only active signature scheme; identity‑aware Merkle paths are the default.

@@ -206,7 +206,7 @@ pub fn create_witness_from_platform_proofs(
     witness.h_windows = decompose_scalar_to_windows(&witness.hash_h);
 
     // Augment witness with EdDSA range check data
-    let augmented_witness = augment_eddsa_witness(&witness).unwrap_or_else(|_| witness);
+    let augmented_witness = augment_eddsa_witness(&witness).unwrap_or(witness);
 
     Ok(augmented_witness)
 }

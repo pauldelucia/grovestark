@@ -43,7 +43,7 @@ Enable features with `--features "feature1,feature2"`.
 ## Running Targeted Tests
 
 - Full suite (quiet): `cargo test --release -q`
-- Single test target: `cargo test --release -q --test ci_test_suite -- --nocapture`
+- Single test target: `cargo test --release -q --test integration_test -- --nocapture`
 - Selected benches:
   - `cargo bench --bench quick_benchmarks --features bench`
   - `cargo bench --bench comprehensive_benchmarks --features bench`

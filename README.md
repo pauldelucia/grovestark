@@ -126,7 +126,7 @@ Common commands:
 cargo test --release -q
 
 # Run a single test target
-cargo test --release -q --test ci_test_suite -- --nocapture
+cargo test --release -q --test integration_test -- --nocapture
 ```
 
 ## Benchmarks

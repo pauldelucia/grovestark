@@ -1,4 +1,4 @@
-/// CI Test Suite - Following GUIDANCE.md recommendations
+/// CI Test Suite
 /// These tests should be run in CI to ensure STARK soundness and correctness
 use grovestark::*;
 

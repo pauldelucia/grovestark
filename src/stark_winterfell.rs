@@ -1893,9 +1893,8 @@ impl<C: winterfell::crypto::RandomCoin> winterfell::crypto::RandomCoin for Trace
     }
 
     fn check_leading_zeros(&self, value: u64) -> u32 {
-        let zeros = self.0.check_leading_zeros(value);
         // eprintln!("🔍 COIN:check_leading_zeros({}) -> {} zeros", value, zeros);
-        zeros
+        self.0.check_leading_zeros(value)
     }
 }
 
@@ -2023,7 +2022,7 @@ impl GroveProver {
         for row in 0..self.config.trace_length {
             main_columns[SEL_BLAKE3_COL][row] = BaseElement::ZERO;
             main_columns[SEL_MERKLE_COL][row] = BaseElement::ZERO;
-            main_columns[SEL_EDDSA_COL][row] = if row >= EDDSA_START && row <= EDDSA_END {
+            main_columns[SEL_EDDSA_COL][row] = if (EDDSA_START..=EDDSA_END).contains(&row) {
                 BaseElement::ONE
             } else {
                 BaseElement::ZERO

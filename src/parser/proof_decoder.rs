@@ -79,11 +79,7 @@ pub fn parse_det_proof_format(raw_proof: &[u8]) -> Result<Vec<MerkleNode>> {
                             hash.copy_from_slice(&raw_proof[i + 1..i + 33]);
 
                             // Check if next byte is Parent (0x02)
-                            let is_left = if i + 33 < raw_proof.len() && raw_proof[i + 33] == 0x02 {
-                                true
-                            } else {
-                                false
-                            };
+                            let is_left = i + 33 < raw_proof.len() && raw_proof[i + 33] == 0x02;
 
                             nodes.push(MerkleNode { hash, is_left });
                             i += 33;
