@@ -1,14 +1,83 @@
 //! Quick benchmark suite for development and CI
 //!
 //! This provides a fast subset of benchmarks that run in < 2 minutes
-//! For comprehensive benchmarks, see comprehensive_benchmarks.rs
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use grovestark::{
-    crypto::Blake3Hasher, field::FieldElement, test_utils::create_valid_eddsa_witness, GroveSTARK,
+    create_witness_from_platform_proofs, crypto::Blake3Hasher, field::FieldElement, GroveSTARK,
     PrivateInputs, PublicInputs, STARKConfig,
 };
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use serde::Deserialize;
+use std::time::Duration;
+
+fn load_fixture_witness() -> (PrivateInputs, PublicInputs) {
+    #[derive(Deserialize)]
+    struct Ed25519Fix {
+        public_key_hex: String,
+        signature_r_hex: String,
+        signature_s_hex: String,
+    }
+
+    #[derive(Deserialize)]
+    struct PubInputsFix {
+        state_root_hex: String,
+        contract_id_hex: String,
+        message_hex: String,
+        timestamp: u64,
+    }
+
+    #[derive(Deserialize)]
+    struct PassFix {
+        document_json: String,
+        document_proof_hex: String,
+        key_proof_hex: String,
+        public_inputs: PubInputsFix,
+        ed25519: Ed25519Fix,
+    }
+
+    #[derive(Deserialize)]
+    struct Fixtures {
+        pass: PassFix,
+    }
+
+    fn hex32(s: &str) -> [u8; 32] {
+        let bytes = hex::decode(s).expect("Invalid hex");
+        assert_eq!(bytes.len(), 32, "expected 32-byte hex");
+        let mut out = [0u8; 32];
+        out.copy_from_slice(&bytes);
+        out
+    }
+
+    let fixtures: Fixtures =
+        serde_json::from_str(include_str!("../tests/fixtures/PASS_AND_FAIL.json")).unwrap();
+
+    let doc_proof = hex::decode(&fixtures.pass.document_proof_hex).unwrap();
+    let key_proof = hex::decode(&fixtures.pass.key_proof_hex).unwrap();
+    let signature_r = hex32(&fixtures.pass.ed25519.signature_r_hex);
+    let signature_s = hex32(&fixtures.pass.ed25519.signature_s_hex);
+    let public_key = hex32(&fixtures.pass.ed25519.public_key_hex);
+    let message = hex::decode(&fixtures.pass.public_inputs.message_hex).unwrap();
+
+    let witness = create_witness_from_platform_proofs(
+        &doc_proof,
+        &key_proof,
+        fixtures.pass.document_json.as_bytes().to_vec(),
+        &public_key,
+        &signature_r,
+        &signature_s,
+        &message,
+    )
+    .expect("fixture witness");
+
+    let public_inputs = PublicInputs {
+        state_root: hex32(&fixtures.pass.public_inputs.state_root_hex),
+        contract_id: hex32(&fixtures.pass.public_inputs.contract_id_hex),
+        message_hash: hex32(&fixtures.pass.public_inputs.message_hex),
+        timestamp: fixtures.pass.public_inputs.timestamp,
+    };
+
+    (witness, public_inputs)
+}
 
 /// Quick proof generation benchmark with minimal config
 fn bench_quick_proof_generation(c: &mut Criterion) {
@@ -23,16 +92,7 @@ fn bench_quick_proof_generation(c: &mut Criterion) {
     config.grinding_bits = 8;
 
     let prover = GroveSTARK::with_config(config);
-    let witness = create_valid_eddsa_witness();
-    let public_inputs = PublicInputs {
-        state_root: [0xFF; 32],
-        contract_id: [0xEE; 32],
-        message_hash: [0xDD; 32],
-        timestamp: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs(),
-    };
+    let (witness, public_inputs) = load_fixture_witness();
 
     group.bench_function("minimal_config", |b| {
         b.iter(|| prover.prove(black_box(witness.clone()), black_box(public_inputs.clone())))
@@ -52,16 +112,7 @@ fn bench_quick_verification(c: &mut Criterion) {
     config.grinding_bits = 8;
 
     let prover = GroveSTARK::with_config(config.clone());
-    let witness = create_valid_eddsa_witness();
-    let public_inputs = PublicInputs {
-        state_root: [0xFF; 32],
-        contract_id: [0xEE; 32],
-        message_hash: [0xDD; 32],
-        timestamp: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs(),
-    };
+    let (witness, public_inputs) = load_fixture_witness();
 
     let proof = prover
         .prove(witness, public_inputs.clone())
