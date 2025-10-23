@@ -112,7 +112,6 @@ impl TestUtils {
             hash: [0x77u8; 32],
             is_left: true,
         }];
-        w.private_key = [9u8; 32];
         w.signature_r = [10u8; 32];
         w.signature_s = [11u8; 32];
         w

@@ -236,7 +236,6 @@ mod tests {
                 hash: [0x33; 32],
                 is_left: false,
             }],
-            private_key: [0x44; 32],
             signature_r: [0x55; 32],
             signature_s: [0x66; 32],
             ..Default::default()

@@ -24,7 +24,7 @@ This document specifies the target behavior and a cleanup roadmap for the GroveS
 - EdDSA: `(R, S)` and `A` (public key) used inside the circuit’s signature check.
 - Document bytes (e.g., `document_cbor`) — not disclosed, only used as inputs to intermediate hashing/constraints when needed.
 
-Note: The current code includes `private_key` in the witness; the circuit does not depend on it. See “API Refinements”.
+Note: The witness no longer includes the signing private key; integration code must keep it outside the circuit inputs. See “API Refinements”.
 
 ## What the Circuit Verifies
 
@@ -58,24 +58,24 @@ Effects:
 ## API Refinements (Proposed)
 
 1. Make `private_key` optional in the witness:
-   - Remove “Private key cannot be zero” from `validate_witness` (keep only for hybrid-feature flows, if any).
-   - Rely on the existence of `(R, S, A)` and the EdDSA verification inside the proof.
+   - ✅ Removed “Private key cannot be zero” from `validate_witness`; witness builders now exclude private key material.
+   - Continue relying on the existence of `(R, S, A)` and the in-circuit EdDSA verification.
 
 2. Add a canonical “challenge builder” helper:
    - `build_challenge(contract_id, state_root, block_or_epoch, timestamp, nonce, context) -> [u8; 32]`.
    - Caller uses this to generate `message_hash` and `(R, S)` before building the witness.
 
-3. Remove the “hybrid” wrapper altogether:
-   - Delete `src/crypto/hybrid_verification.rs` and any wrappers that only existed to support it.
+3. Remove the “hybrid” wrapper altogether (done):
+   - ✅ Deleted `src/crypto/hybrid_verification.rs` and its privacy-prover wrapper.
    - The core ZK proof binds to a canonical in‑circuit challenge; no separate off‑circuit signature layer is needed.
 
 ## Clean‑Up & Hardening Roadmap
 
 Phase 1 — Minimal, Safe Core (short)
-- [ ] Remove `private_key` requirement in `validate_witness` and witness builders.
+- [x] Remove `private_key` requirement in `validate_witness` and witness builders.
 - [ ] Add challenge builder helper and thread it into tests/examples.
 - [ ] Ensure all tests that previously used ad‑hoc proofs now use `PASS_AND_FAIL.json` fixtures.
-- [ ] Remove hybrid-related files and references.
+- [x] Remove hybrid-related files and references.
 - [ ] Reduce debug logs in hot paths; keep `wf_dbg` gated.
 
 Phase 2 — Public API & Docs (short)

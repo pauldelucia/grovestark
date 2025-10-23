@@ -41,7 +41,6 @@ fn test_fixed_identity_extraction() {
     let signature_r = [0x02u8; 32];
     let signature_s = [0x03u8; 32];
     let message = b"test message";
-    let private_key = [0x04u8; 32];
 
     println!(
         "Expected identity ID: {}",
@@ -65,7 +64,6 @@ fn test_fixed_identity_extraction() {
         &signature_r,
         &signature_s,
         message,
-        &private_key,
     );
 
     match result {
@@ -164,9 +162,6 @@ fn test_extraction_with_real_offsets() {
         hex::encode(&key_proof[788..820])
     );
 
-    // Extract using our fixed function (simplified test without full witness creation)
-    use grovestark::ed25519_helpers;
-
     // We can't directly call extract_identity_id_from_key_proof as it's private,
     // but we can test through create_witness_from_platform_proofs
 
@@ -178,7 +173,6 @@ fn test_extraction_with_real_offsets() {
     let signature_r = [0x02u8; 32];
     let signature_s = [0x03u8; 32];
     let message = b"test";
-    let private_key = [0x04u8; 32];
 
     let result = create_witness_from_platform_proofs(
         &document_proof,
@@ -188,7 +182,6 @@ fn test_extraction_with_real_offsets() {
         &signature_r,
         &signature_s,
         message,
-        &private_key,
     );
 
     // Check that we're extracting the correct ID

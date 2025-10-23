@@ -12,7 +12,6 @@ fn test_verification_rejects_mismatched_identity() {
         public_key_hex: String,
         signature_r_hex: String,
         signature_s_hex: String,
-        private_key_hex: String,
     }
     #[derive(serde::Deserialize)]
     struct PubInputsFix {
@@ -25,7 +24,6 @@ fn test_verification_rejects_mismatched_identity() {
     struct PassFix {
         document_json: String,
         document_proof_hex: String,
-        key_proof_hex: String,
         public_inputs: PubInputsFix,
         ed25519: Ed25519Fix,
     }
@@ -52,7 +50,6 @@ fn test_verification_rejects_mismatched_identity() {
     let pub_key = hex32(&fixtures.pass.ed25519.public_key_hex);
     let sig_r = hex32(&fixtures.pass.ed25519.signature_r_hex);
     let sig_s = hex32(&fixtures.pass.ed25519.signature_s_hex);
-    let priv_key = hex32(&fixtures.pass.ed25519.private_key_hex);
     let message = hex::decode(&fixtures.pass.public_inputs.message_hex).unwrap();
 
     // Build witness with mismatched owner/identity (no validation)
@@ -64,7 +61,6 @@ fn test_verification_rejects_mismatched_identity() {
         &sig_r,
         &sig_s,
         &message,
-        &priv_key,
     )
     .expect("no-validation witness");
 
@@ -98,7 +94,6 @@ fn test_matching_identity_should_work() {
         public_key_hex: String,
         signature_r_hex: String,
         signature_s_hex: String,
-        private_key_hex: String,
     }
     #[derive(serde::Deserialize)]
     struct PubInputsFix {
@@ -133,7 +128,6 @@ fn test_matching_identity_should_work() {
     let pub_key = hex32(&fixtures.pass.ed25519.public_key_hex);
     let sig_r = hex32(&fixtures.pass.ed25519.signature_r_hex);
     let sig_s = hex32(&fixtures.pass.ed25519.signature_s_hex);
-    let priv_key = hex32(&fixtures.pass.ed25519.private_key_hex);
     let message = hex::decode(&fixtures.pass.public_inputs.message_hex).unwrap();
 
     let witness = create_witness_from_platform_proofs(
@@ -144,7 +138,6 @@ fn test_matching_identity_should_work() {
         &sig_r,
         &sig_s,
         &message,
-        &priv_key,
     )
     .expect("fixture witness build");
 

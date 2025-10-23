@@ -26,7 +26,6 @@ struct Ed25519Fix {
     public_key_hex: String,
     signature_r_hex: String,
     signature_s_hex: String,
-    private_key_hex: String,
 }
 
 #[derive(Deserialize)]
@@ -72,16 +71,13 @@ fn det_logs_pass_case_verifies() {
     let sig_s_vec = hex::decode(&fixtures.pass.ed25519.signature_s_hex).unwrap();
     let pubkey_vec = hex::decode(&fixtures.pass.ed25519.public_key_hex).unwrap();
     let msg_vec = hex::decode(&fixtures.pass.public_inputs.message_hex).unwrap();
-    let privkey_vec = hex::decode(&fixtures.pass.ed25519.private_key_hex).unwrap();
 
     let mut sig_r = [0u8; 32];
     let mut sig_s = [0u8; 32];
     let mut pubkey = [0u8; 32];
-    let mut privkey = [0u8; 32];
     sig_r.copy_from_slice(&sig_r_vec);
     sig_s.copy_from_slice(&sig_s_vec);
     pubkey.copy_from_slice(&pubkey_vec);
-    privkey.copy_from_slice(&privkey_vec);
 
     // Build witness (validated path; enforces owner == identity via GroveVM)
     let witness = create_witness_from_platform_proofs(
@@ -92,7 +88,6 @@ fn det_logs_pass_case_verifies() {
         &sig_r,
         &sig_s,
         &msg_vec,
-        &privkey,
     )
     .expect("witness build (pass)");
 
@@ -130,7 +125,6 @@ fn det_logs_fail_case_rejects() {
     let sig_s = hex32(&fixtures.pass.ed25519.signature_s_hex);
     let pubkey = hex32(&fixtures.pass.ed25519.public_key_hex);
     let msg = hex::decode(&fixtures.pass.public_inputs.message_hex).unwrap();
-    let privkey = hex32(&fixtures.pass.ed25519.private_key_hex);
 
     // Build witness using the no-validation path to allow mismatched identity
     let witness = create_witness_from_platform_proofs(
@@ -141,7 +135,6 @@ fn det_logs_fail_case_rejects() {
         &sig_r,
         &sig_s,
         &msg,
-        &privkey,
     )
     .expect("witness build (fail)");
 

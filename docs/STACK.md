@@ -41,10 +41,9 @@ This document enumerates core dependencies, their roles, and key internal module
 ## Environment Variables
 
 - `GS_ALLOW_WEAK_PARAMS=1`: bypass production guardrails for tests/benches
-- `FAST_TESTS=1`: select lighter-but-compatible params in hybrid verifier paths
+- `FAST_TESTS=1`: select lighter-but-compatible params for tests and tooling
 - `GS_RELAX_ID_VALIDATION=1`: relax identity vs owner equality in specific negative tests
 - `GS_EXPANSION_FACTOR`, `GS_NUM_QUERIES`, `GS_GRINDING_BITS`: override parameters in probe tools
 - `GS_ENABLE_C6`, `GS_ISOLATE_OOD`, `GS_LANE_PROBE`, `GS_B3_ONLY_IDX`, `GS_B3_ENABLE_INDICES`: expert diagnostics around constraint evaluation and BLAKE3 indices (see `src/stark_winterfell.rs`)
 - `VALIDATE_TRACE=1`: enable extra trace validation checks in verifier paths
 - Standard `RUST_LOG` controls logging when used with `env_logger`/`tracing-subscriber`
-

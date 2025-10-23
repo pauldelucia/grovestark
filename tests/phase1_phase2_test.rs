@@ -123,7 +123,6 @@ fn test_phase2_document_verification() {
         }],
         identity_leaf_to_state_path: vec![],
 
-        private_key: [0x55; 32],
         signature_r: [0x66; 32],
         signature_s: [0x77; 32],
         ..Default::default()

@@ -1,5 +1,4 @@
 /// Quick verification that MERKLE_COMP fix resolves constraint 14
-use grovestark::stark_winterfell::*;
 
 #[test]
 fn verify_merkle_comp_fix() {

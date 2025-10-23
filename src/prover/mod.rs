@@ -1,7 +1,6 @@
 pub mod commitment;
 pub mod document_verifier;
 pub mod fri;
-pub mod privacy_preserving_prover;
 // Trace generation happens internally in stark_winterfell
 
 use crate::crypto::Blake3Hasher;
@@ -268,7 +267,7 @@ impl GroveSTARK {
 
         // For now, hardcode to 4 for DET compatibility
         // TODO: This should come from the witness/key metadata
-        let key_security_level = 4; // self.compute_key_security_level(&witness.private_key);
+        let key_security_level = 4; // placeholder: compute from key metadata when available
 
         let proof_commitment = Blake3Hasher::hash(
             &[

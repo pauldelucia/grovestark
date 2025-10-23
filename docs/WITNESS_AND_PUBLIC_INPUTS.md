@@ -42,7 +42,6 @@ Extended coordinates and intermediates:
 Integration helpers:
 - `grovedb_proof: Vec<u8>`: raw GroveDB layered proof
 - `document_cbor: Vec<u8>`: document bytes for public output commitment
-- `private_key: [u8; 32]`: currently retained for DET compatibility; not used in-circuit
 
 ## Validation
 
@@ -59,4 +58,3 @@ Helpers in `src/ed25519_helpers.rs` provide convenient constructors:
 - `compressed_to_extended(...)`: convert compressed Ed25519 points to extended limbs
 
 The circuit expects `message_hash` as the 32-byte challenge. Construct it from a canonical application-domain message and pass it via `PublicInputs`.
-

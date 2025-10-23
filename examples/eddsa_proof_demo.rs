@@ -23,7 +23,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let signing_key = SigningKey::generate(&mut OsRng);
     let verifying_key = signing_key.verifying_key();
     let public_key_bytes = verifying_key.to_bytes();
-    let private_key_bytes = signing_key.to_bytes();
 
     // Message to sign (simulating document hash)
     let message = b"GroveDB document commitment";
@@ -90,7 +89,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             is_left: true,
         }],
         // EdDSA
-        private_key: private_key_bytes,
         signature_r,
         signature_s,
         public_key_a: public_key_bytes,

@@ -109,7 +109,6 @@ fn test_validation_bypass_vulnerability() {
         &[0u8; 32], // signature_r
         &[0u8; 32], // signature_s
         &[0u8; 32], // message
-        &[0u8; 32], // private key
     );
 
     match witness_result {

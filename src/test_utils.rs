@@ -4,8 +4,8 @@ use crate::types::{MerkleNode, PrivateInputs};
 use ed25519_dalek::{Signer, SigningKey};
 use rand::rngs::OsRng;
 
-/// Create a witness with a valid EdDSA signature
-pub fn create_valid_eddsa_witness() -> PrivateInputs {
+/// Create a witness with a valid EdDSA signature and return it alongside the signing key
+pub fn create_valid_eddsa_witness_with_key() -> (PrivateInputs, [u8; 32]) {
     // Generate a real Ed25519 keypair
     let signing_key = SigningKey::generate(&mut OsRng);
     let verifying_key = signing_key.verifying_key();
@@ -54,7 +54,6 @@ pub fn create_valid_eddsa_witness() -> PrivateInputs {
             is_left: false,
         }],
         // EdDSA
-        private_key: private_key_bytes,
         signature_r,
         signature_s,
         public_key_a: public_key_bytes,
@@ -67,5 +66,11 @@ pub fn create_valid_eddsa_witness() -> PrivateInputs {
     crate::populate_witness_with_extended(&mut witness, &signature_r, &public_key_bytes, message)
         .expect("Failed to populate extended coordinates");
 
+    (witness, private_key_bytes)
+}
+
+/// Create a witness with a valid EdDSA signature
+pub fn create_valid_eddsa_witness() -> PrivateInputs {
+    let (witness, _private_key) = create_valid_eddsa_witness_with_key();
     witness
 }

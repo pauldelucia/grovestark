@@ -25,7 +25,6 @@ fn test_fixture_end_to_end_valid() {
         public_key_hex: String,
         signature_r_hex: String,
         signature_s_hex: String,
-        private_key_hex: String,
     }
     #[derive(serde::Deserialize)]
     struct PubInputsFix {
@@ -57,7 +56,6 @@ fn test_fixture_end_to_end_valid() {
     let sig_s = hex32(&fixtures.pass.ed25519.signature_s_hex);
     let pub_key = hex32(&fixtures.pass.ed25519.public_key_hex);
     let msg = hex::decode(&fixtures.pass.public_inputs.message_hex).unwrap();
-    let priv_key = hex32(&fixtures.pass.ed25519.private_key_hex);
 
     let witness = create_witness_from_platform_proofs(
         &document_proof,
@@ -67,7 +65,6 @@ fn test_fixture_end_to_end_valid() {
         &sig_r,
         &sig_s,
         &msg,
-        &priv_key,
     )
     .expect("validated witness");
 
@@ -95,7 +92,6 @@ fn test_fixture_end_to_end_invalid() {
         public_key_hex: String,
         signature_r_hex: String,
         signature_s_hex: String,
-        private_key_hex: String,
     }
     #[derive(serde::Deserialize)]
     struct PubInputsFix {
@@ -132,7 +128,6 @@ fn test_fixture_end_to_end_invalid() {
     let sig_s = hex32(&fixtures.pass.ed25519.signature_s_hex);
     let pub_key = hex32(&fixtures.pass.ed25519.public_key_hex);
     let msg = hex::decode(&fixtures.pass.public_inputs.message_hex).unwrap();
-    let priv_key = hex32(&fixtures.pass.ed25519.private_key_hex);
 
     // Build using no-validation path to proceed with negative test
     let witness = create_witness_from_platform_proofs(
@@ -143,7 +138,6 @@ fn test_fixture_end_to_end_invalid() {
         &sig_r,
         &sig_s,
         &msg,
-        &priv_key,
     )
     .expect("no-validation witness");
 

@@ -36,7 +36,6 @@ fn main() {
 
     // Minimal witness that passes validation
     let mut witness = PrivateInputs::default();
-    witness.private_key = [1u8; 32];
     witness.signature_r = [1u8; 32];
     witness.signature_s = [1u8; 32];
     witness.document_cbor = vec![0x01];

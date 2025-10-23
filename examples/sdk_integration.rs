@@ -61,15 +61,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nStep 3: Creating witness from SDK proofs...");
 
     // Additional required values for the simplified 2-proof path
+    let public_key_bytes = verifying_key.to_bytes();
+
     let witness = create_witness_from_platform_proofs(
         &document_proof,
         &identity_proof,
         vec![0xDDu8; 100], // Document JSON/CBOR data
+        &public_key_bytes,
         &signature_r,
         &signature_s,
-        &verifying_key.to_bytes(),
         message,
-        &signing_key.to_bytes(),
     )?;
 
     println!("  ✓ Created witness with:");

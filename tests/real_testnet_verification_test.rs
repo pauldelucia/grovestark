@@ -7,7 +7,6 @@ fn load_pass_fixture() -> (grovestark::PrivateInputs, PublicInputs) {
         public_key_hex: String,
         signature_r_hex: String,
         signature_s_hex: String,
-        private_key_hex: String,
     }
     #[derive(serde::Deserialize)]
     struct PubInputsFix {
@@ -46,7 +45,6 @@ fn load_pass_fixture() -> (grovestark::PrivateInputs, PublicInputs) {
     let sig_s = hex32(&fixtures.pass.ed25519.signature_s_hex);
     let pubkey = hex32(&fixtures.pass.ed25519.public_key_hex);
     let msg = hex::decode(&fixtures.pass.public_inputs.message_hex).unwrap();
-    let privkey = hex32(&fixtures.pass.ed25519.private_key_hex);
 
     let witness = grovestark::create_witness_from_platform_proofs(
         &doc_proof,
@@ -56,7 +54,6 @@ fn load_pass_fixture() -> (grovestark::PrivateInputs, PublicInputs) {
         &sig_r,
         &sig_s,
         &msg,
-        &privkey,
     )
     .expect("fixture witness build");
 

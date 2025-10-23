@@ -9,7 +9,6 @@ fn test_minimal_proof() {
     witness.document_cbor = vec![1, 2, 3, 4]; // Minimal document
     witness.owner_id = [1u8; 32];
     witness.identity_id = [1u8; 32]; // Same as owner_id for valid proof
-    witness.private_key = [42u8; 32];
 
     // Use real testnet EdDSA signature values (non-zero)
     witness.signature_r =

@@ -14,7 +14,6 @@ fn test_proof_generation_with_real_testnet_data() {
         public_key_hex: String,
         signature_r_hex: String,
         signature_s_hex: String,
-        private_key_hex: String,
     }
     #[derive(serde::Deserialize)]
     struct PubInputsFix {
@@ -49,7 +48,6 @@ fn test_proof_generation_with_real_testnet_data() {
     let public_key = hex32(&fixtures.pass.ed25519.public_key_hex);
     let signature_r = hex32(&fixtures.pass.ed25519.signature_r_hex);
     let signature_s = hex32(&fixtures.pass.ed25519.signature_s_hex);
-    let private_key = hex32(&fixtures.pass.ed25519.private_key_hex);
     let message = hex::decode(&fixtures.pass.public_inputs.message_hex).unwrap();
 
     println!("Creating witness from platform proofs...");
@@ -63,7 +61,6 @@ fn test_proof_generation_with_real_testnet_data() {
         &signature_r,
         &signature_s,
         &message,
-        &private_key,
     );
 
     let witness = match witness_result {
@@ -140,56 +137,6 @@ fn test_proof_generation_with_real_testnet_data() {
     println!("  - PoW nonce: {}", proof.pow_nonce);
 
     println!("\n🎉 Test completed successfully!");
-}
-
-/// Create a mock document proof for testing
-fn create_mock_document_proof(owner_id: &[u8]) -> Vec<u8> {
-    let mut proof = Vec::new();
-
-    // Mock proof structure (simplified)
-    // State root (32 bytes)
-    proof.extend_from_slice(&[1u8; 32]);
-
-    // Proof data length (4 bytes)
-    proof.extend_from_slice(&100u32.to_le_bytes());
-
-    // Mock Merkle operations
-    proof.push(0x01); // Push operation
-    proof.extend_from_slice(owner_id); // Owner ID as leaf
-
-    proof.push(0x10); // KVHash operation
-    proof.extend_from_slice(&[2u8; 32]); // Mock key
-    proof.extend_from_slice(&[3u8; 32]); // Mock value hash
-
-    proof.push(0x02); // Parent operation
-    proof.extend_from_slice(&[4u8; 32]); // Mock parent hash
-
-    proof
-}
-
-/// Create a mock key proof for testing
-fn create_mock_key_proof(identity_id: &[u8]) -> Vec<u8> {
-    let mut proof = Vec::new();
-
-    // Mock proof structure (simplified)
-    // State root (32 bytes)
-    proof.extend_from_slice(&[1u8; 32]);
-
-    // Proof data length (4 bytes)
-    proof.extend_from_slice(&100u32.to_le_bytes());
-
-    // Mock Merkle operations for identity
-    proof.push(0x01); // Push operation
-    proof.extend_from_slice(identity_id); // Identity ID as leaf
-
-    proof.push(0x11); // KVValueHash operation
-    proof.extend_from_slice(&[5u8; 32]); // Mock key hash
-    proof.extend_from_slice(&[6u8; 32]); // Mock value
-
-    proof.push(0x03); // Child operation
-    proof.extend_from_slice(&[7u8; 32]); // Mock child hash
-
-    proof
 }
 
 #[test]
@@ -280,7 +227,6 @@ fn create_simple_witness() -> grovestark::PrivateInputs {
 
         // Document CBOR - ensure non-empty
         document_cbor: vec![1, 2, 3, 4, 5],
-        private_key: [3u8; 32],
         public_key_a: [4u8; 32],
         hash_h: [5u8; 32],
 

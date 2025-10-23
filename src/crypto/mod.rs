@@ -9,7 +9,6 @@ pub mod ed25519_scalar;
 pub mod edwards_arithmetic;
 pub mod fe25519_digits;
 pub mod field_conversion;
-pub mod hybrid_verification;
 pub mod identity_commitments;
 pub mod merkle;
 pub mod point_decompression;
@@ -20,7 +19,6 @@ pub mod sqrt_ratio;
 
 pub use blake3_ops::{Blake3Hasher, Blake3State};
 pub use edwards_arithmetic::{point_double, unified_add, Ed25519Constants, ExtendedPoint};
-pub use hybrid_verification::{HybridProof, HybridVerifier, PrivacyLevel};
 pub use identity_commitments::{
     default_key_usage_tag, eddsa_challenge, identity_leaf_node, identity_leaf_payload,
     key_leaf_node, key_leaf_payload, owner_id_leaf, H_inner, H_leaf,

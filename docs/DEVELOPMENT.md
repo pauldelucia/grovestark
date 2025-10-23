@@ -14,7 +14,7 @@ This guide covers environment setup, running, logging, features, and test knobs 
 - Defaults (non-test builds): `expansion_factor=16`, `num_queries=48`, `folding_factor=4`, `grinding_bits=24`, `trace_length=65536`
 - Guardrails are enforced by `validate_config` unless `GS_ALLOW_WEAK_PARAMS=1`.
 - For fast CI or local iteration:
-  - `FAST_TESTS=1`: use lighter params in hybrid verifier paths
+  - `FAST_TESTS=1`: use lighter params in selected prover paths/tests
   - `GS_ALLOW_WEAK_PARAMS=1`: bypass guardrails when running reduced configs
 
 ## Useful Env Vars
@@ -53,4 +53,3 @@ Enable features with `--features "feature1,feature2"`.
 - Public inputs bind proofs to a specific `state_root`, `contract_id`, and `message_hash` (32-byte challenge).
 - Build a canonical application message `C` and derive `message_hash = first_32_bytes(H(C))`. Sign `C` off-circuit.
 - Use `ed25519_helpers` to generate the witness from Platform proofs and Ed25519 data, ensuring extended coordinates and windows are populated consistently.
-

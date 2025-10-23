@@ -1,6 +1,6 @@
 use grovestark::crypto::ed25519::decompress::augment_witness_with_extended;
 use grovestark::phases::eddsa::witness_augmentation::augment_eddsa_witness;
-use grovestark::types::{MerkleNode, PrivateInputs, PublicInputs};
+use grovestark::types::{MerkleNode, PrivateInputs};
 
 /// Create a valid EdDSA witness with proper extended coordinates
 pub fn create_valid_eddsa_witness_with_decompression() -> PrivateInputs {
@@ -29,12 +29,6 @@ pub fn create_valid_eddsa_witness_with_decompression() -> PrivateInputs {
         0x85, 0xdf,
     ];
 
-    let private_key = [
-        0x90, 0xb3, 0x78, 0x10, 0xa3, 0xe2, 0x42, 0xfa, 0x3a, 0xe2, 0xbe, 0xa4, 0x42, 0x66, 0xbc,
-        0x42, 0xe1, 0x94, 0x78, 0xad, 0xb3, 0x6c, 0xda, 0xb1, 0x93, 0x0c, 0xb3, 0xb4, 0xb8, 0x3a,
-        0x23, 0x07,
-    ];
-
     let owner_id = {
         let mut id = [0u8; 32];
         id[0] = 5;
@@ -49,7 +43,6 @@ pub fn create_valid_eddsa_witness_with_decompression() -> PrivateInputs {
         signature_s,
         public_key_a,
         hash_h,
-        private_key,
         document_cbor: vec![1, 2, 3, 4],
         owner_id,
         identity_id: owner_id, // Must match owner_id

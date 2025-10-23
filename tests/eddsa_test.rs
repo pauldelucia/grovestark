@@ -115,7 +115,6 @@ fn test_eddsa_witness_creation() {
         is_left: true,
     }];
     witness.pubkey_a_compressed = witness.public_key_a;
-    witness.private_key = [0x42; 32];
 
     // EdDSA signature components
     witness.signature_r = [0x11; 32];

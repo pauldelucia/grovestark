@@ -1,6 +1,6 @@
 //! Test the complete STARK proof with all three phases
 
-use grovestark::types::{MerkleNode, PrivateInputs, PublicInputs, STARKConfig};
+use grovestark::types::{MerkleNode, PrivateInputs, STARKConfig};
 
 #[test]
 fn test_full_stark_proof() {
@@ -37,13 +37,6 @@ fn test_full_stark_proof() {
         docroot_to_state_path: vec![],
         key_leaf_to_keysroot_path: vec![],
         identity_leaf_to_state_path: vec![],
-
-        // EdDSA private key (32 bytes)
-        private_key: [
-            0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54,
-            0x32, 0x10, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC,
-            0xDD, 0xEE, 0xFF, 0x00,
-        ],
 
         // EdDSA signature components (r, s)
         signature_r: [
@@ -83,7 +76,6 @@ fn test_full_stark_proof() {
     assert_eq!(config.num_trace_columns, 72);
 
     // Verify witness data sizes
-    assert_eq!(witness.private_key.len(), 32);
     assert_eq!(witness.signature_r.len(), 32);
     assert_eq!(witness.signature_s.len(), 32);
     assert_eq!(witness.owner_id_leaf_to_doc_path.len(), 3);

@@ -78,12 +78,6 @@ fn test_proof_with_real_state_root() {
         0x8e, 0x4d,
     ];
 
-    let private_key = [
-        0xfc, 0x6e, 0x67, 0x5c, 0xeb, 0x88, 0xe4, 0x1f, 0x7d, 0xdb, 0xea, 0xec, 0x52, 0x00, 0xd3,
-        0x25, 0x34, 0x67, 0x06, 0x07, 0x86, 0x02, 0xe3, 0x8b, 0x65, 0x7b, 0x42, 0x88, 0x84, 0xab,
-        0x22, 0x28,
-    ];
-
     // Compute hash_h properly
     let hash_h = compute_challenge_scalar(&signature_r, &public_key_a, &message);
 
@@ -111,7 +105,6 @@ fn test_proof_with_real_state_root() {
         signature_s,
         public_key_a,
         hash_h,
-        private_key,
 
         // Document CBOR data (required to be non-empty)
         document_cbor: vec![1, 2, 3, 4],

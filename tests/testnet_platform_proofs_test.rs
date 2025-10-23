@@ -71,7 +71,6 @@ fn test_with_real_testnet_data() {
         &signature_r,
         &signature_s,
         &message_bytes,
-        &private_key,
     );
 
     match result {

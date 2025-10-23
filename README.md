@@ -72,7 +72,6 @@ let document_json = fixtures["pass"]["document_json"].as_str().unwrap().as_bytes
 // 2) Build the witness from Platform proofs
 let witness = create_witness_from_platform_proofs(
     &doc_proof, &key_proof, document_json, &pubkey, &sig_r, &sig_s, &message,
-    &hex::decode(fixtures["pass"]["ed25519"]["private_key_hex"].as_str().unwrap()).unwrap().try_into().unwrap(),
 ).expect("witness");
 
 // 3) Public inputs (bind to state_root, contract_id, challenge hash, timestamp)

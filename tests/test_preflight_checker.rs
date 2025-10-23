@@ -12,7 +12,6 @@ fn test_preflight_checker() {
         public_key_hex: String,
         signature_r_hex: String,
         signature_s_hex: String,
-        private_key_hex: String,
     }
     #[derive(serde::Deserialize)]
     struct PubInputsFix {
@@ -48,7 +47,6 @@ fn test_preflight_checker() {
     let signature_r = hex32(&fixtures.pass.ed25519.signature_r_hex);
     let signature_s = hex32(&fixtures.pass.ed25519.signature_s_hex);
     let message = hex::decode(&fixtures.pass.public_inputs.message_hex).unwrap();
-    let private_key = hex32(&fixtures.pass.ed25519.private_key_hex);
     let document_json = fixtures.pass.document_json.as_bytes().to_vec();
 
     println!("Creating witness...");
@@ -60,7 +58,6 @@ fn test_preflight_checker() {
         &signature_r,
         &signature_s,
         &message,
-        &private_key,
     )
     .expect("Failed to create witness");
 

@@ -42,10 +42,6 @@ pub struct PrivateInputs {
     /// Document CBOR
     #[serde(default)]
     pub document_cbor: Vec<u8>,
-    /// Private key for EdDSA signing (kept for compatibility)
-    #[serde(default)]
-    pub private_key: [u8; 32],
-
     // === EdDSA Witness Augmentation ===
     /// Public key A (alias for pubkey_a_compressed for compatibility)
     #[serde(default)]
@@ -150,7 +146,6 @@ impl Default for PrivateInputs {
             // GroveDB proof
             grovedb_proof: Vec::new(),
             document_cbor: Vec::new(),
-            private_key: [0u8; 32],
             public_key_a: [0u8; 32],
             hash_h: [0u8; 32],
             s_windows: vec![0u8; 64],
@@ -265,7 +260,7 @@ impl Default for STARKConfig {
         // production builds on stronger parameters.
         //
         // To override in tests without changing code, you can also set:
-        //   FAST_TESTS=1  (honored inside hybrid verifier path)
+        //   FAST_TESTS=1  (honored by various fast-path guards)
         // for even faster runs when needed.
         #[cfg(test)]
         {

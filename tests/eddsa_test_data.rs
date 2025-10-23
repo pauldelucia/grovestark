@@ -62,27 +62,6 @@ pub const A_EXTENDED_T: [u8; 32] = [0; 32]; // TODO: Compute X*Y/Z
 #[cfg(test)]
 mod tests {
     use super::*;
-    use grovestark::types::{PrivateInputs, PublicInputs};
-
-    /// Create a witness with valid EdDSA test data
-    pub fn create_valid_eddsa_witness() -> PrivateInputs {
-        PrivateInputs {
-            private_key: EDDSA_PRIVATE_KEY,
-            signature_r: SIGNATURE_R,
-            signature_s: SIGNATURE_S,
-            hash_h: HASH_H,
-            r_extended_x: R_EXTENDED_X,
-            r_extended_y: R_EXTENDED_Y,
-            r_extended_z: R_EXTENDED_Z,
-            r_extended_t: R_EXTENDED_T,
-            a_extended_x: A_EXTENDED_X,
-            a_extended_y: A_EXTENDED_Y,
-            a_extended_z: A_EXTENDED_Z,
-            a_extended_t: A_EXTENDED_T,
-            ..Default::default()
-        }
-    }
-
     #[test]
     fn test_eddsa_signature_validity() {
         use ed25519_dalek::{Signature, Verifier, VerifyingKey};

@@ -1,6 +1,5 @@
-use grovestark::crypto::hybrid_verification::{HybridVerifier, PrivacyLevel};
 use grovestark::prover::GroveSTARK;
-use grovestark::test_utils::create_valid_eddsa_witness;
+use grovestark::test_utils::create_valid_eddsa_witness_with_key;
 use grovestark::types::{PublicInputs, STARKConfig};
 // use grovestark::verifier::Verifier;
 
@@ -60,7 +59,7 @@ fn test_real_stark_proof_generation() {
     config.trace_length = 65536; // Required for all phases
 
     // Create witness with valid EdDSA signature
-    let witness = create_valid_eddsa_witness();
+    let (witness, _private_key) = create_valid_eddsa_witness_with_key();
 
     let public = PublicInputs {
         state_root: [0x99; 32],
@@ -103,46 +102,4 @@ fn test_real_stark_proof_generation() {
     assert!(is_valid, "Proof should verify");
 
     println!("✅ STARK proof verification works!");
-}
-
-#[test]
-fn test_hybrid_verification_with_real_crypto() {
-    // Create witness with valid EdDSA signature
-    let witness = create_valid_eddsa_witness();
-
-    let public = PublicInputs {
-        state_root: [0xAA; 32],
-        contract_id: [0xBB; 32],
-        message_hash: [0xCC; 32],
-        timestamp: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs(),
-    };
-
-    println!("Generating hybrid proof with real cryptography...");
-
-    // Test maximum privacy (ring signatures)
-    let proof_max =
-        HybridVerifier::prove_ownership(&witness, &public, PrivacyLevel::Maximum).unwrap();
-    assert!(proof_max.signature_component.ring_signature.is_some());
-    println!("✅ Maximum privacy proof generated (with ring signatures)");
-
-    // Test standard privacy
-    let _proof_std =
-        HybridVerifier::prove_ownership(&witness, &public, PrivacyLevel::Standard).unwrap();
-    println!("✅ Standard privacy proof generated");
-
-    // Test minimal privacy
-    let _proof_min =
-        HybridVerifier::prove_ownership(&witness, &public, PrivacyLevel::Minimal).unwrap();
-    println!("✅ Minimal privacy proof generated");
-
-    // Test selective disclosure
-    let view = proof_max
-        .with_disclosure(grovestark::crypto::hybrid_verification::DisclosureLevel::ValidityOnly);
-    assert!(view.ownership_proven);
-    println!("✅ Selective disclosure works");
-
-    println!("✅ All hybrid verification modes work with real crypto!");
 }

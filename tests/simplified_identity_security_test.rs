@@ -34,7 +34,6 @@ fn test_accepts_matched_owner_identity() {
     let signature_r = [0xDDu8; 32];
     let signature_s = [0xEEu8; 32];
     let message = b"test message";
-    let private_key = [0xFFu8; 32];
 
     // This should SUCCEED because owner_id == identity_id
     let result = create_witness_from_platform_proofs(
@@ -45,7 +44,6 @@ fn test_accepts_matched_owner_identity() {
         &signature_r,
         &signature_s,
         message,
-        &private_key,
     );
 
     // Note: This will fail on EdDSA decompression with dummy data,
@@ -121,7 +119,6 @@ fn test_witness_structure() {
 
     let signature_s = [0x01u8; 32];
     let message = b"test";
-    let private_key = [0x01u8; 32];
 
     let result = create_witness_from_platform_proofs(
         &document_proof,
@@ -131,7 +128,6 @@ fn test_witness_structure() {
         &signature_r,
         &signature_s,
         message,
-        &private_key,
     );
 
     // Check if we get past the owner_id == identity_id check

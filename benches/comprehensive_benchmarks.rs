@@ -30,7 +30,6 @@ fn create_production_witness(doc_size: usize) -> PrivateInputs {
     let signing_key = SigningKey::generate(&mut OsRng);
     let verifying_key = signing_key.verifying_key();
     let public_key_bytes = verifying_key.to_bytes();
-    let private_key_bytes = signing_key.to_bytes();
 
     // Create and sign a message
     let message = b"benchmark_challenge_message";
@@ -77,7 +76,6 @@ fn create_production_witness(doc_size: usize) -> PrivateInputs {
     }];
 
     // Set real EdDSA values
-    witness.private_key = private_key_bytes;
     witness.signature_r = signature_r;
     witness.signature_s = signature_s;
     witness.public_key_a = public_key_bytes;
@@ -125,7 +123,7 @@ fn create_witness_variant(variant: usize) -> PrivateInputs {
     // Vary critical fields to ensure different proofs
     witness.owner_id[0] = variant as u8;
     witness.document_cbor[0] = (variant + 100) as u8;
-    witness.private_key[31] = (variant * 2) as u8;
+    witness.signature_s[31] = (variant * 2) as u8;
 
     witness
 }
