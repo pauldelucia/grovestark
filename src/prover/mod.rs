@@ -22,20 +22,21 @@ impl GroveSTARK {
         Self { config }
     }
 
-    pub fn prove(&self, witness: PrivateInputs, public: PublicInputs) -> Result<STARKProof> {
+    pub fn prove(&self, witness: PrivateInputs, public_inputs: PublicInputs) -> Result<STARKProof> {
         // Validate inputs
         crate::validation::validate_witness(&witness)?;
-        crate::validation::validate_public_inputs(&public)?;
+        crate::validation::validate_public_inputs(&public_inputs)?;
         crate::validation::validate_config(&self.config)?;
 
         // Identity-aware witness validation
         crate::validation::validate_identity_witness(&witness)?;
 
         // Compute public outputs
-        let public_outputs = self.compute_outputs(&witness, &public)?;
+        let public_outputs = self.compute_outputs(&witness, &public_inputs)?;
 
         // Generate STARK proof using winterfell
-        let proof_bytes = crate::stark_winterfell::generate_proof(&witness, &public, &self.config)?;
+        let proof_bytes =
+            crate::stark_winterfell::generate_proof(&witness, &public_inputs, &self.config)?;
 
         // The proof bytes contain the complete winterfell STARK proof
         // We'll store them directly in our STARKProof structure
@@ -57,6 +58,7 @@ impl GroveSTARK {
         let constraint_commitment = if proof_bytes.len() >= 64 {
             proof_bytes[32..64].to_vec()
         } else {
+            eprintln!("WARNING: Proof too small for constraint commitment extraction");
             vec![0u8; 32]
         };
 
@@ -68,12 +70,11 @@ impl GroveSTARK {
             trace_commitment,
             constraint_commitment,
             fri_proof: crate::types::FRIProof {
-                query_rounds: vec![], // Empty - winterfell handles FRI internally
                 final_polynomial: proof_bytes.clone(), // Contains complete winterfell STARK proof
                 proof_of_work: pow_nonce,
             },
             pow_nonce,
-            public_inputs: public.clone(),
+            public_inputs: public_inputs.clone(),
             public_outputs,
         };
 
@@ -267,7 +268,7 @@ impl GroveSTARK {
 
         // For now, hardcode to 4 for DET compatibility
         // TODO: This should come from the witness/key metadata
-        let key_security_level = 4; // placeholder: compute from key metadata when available
+        let key_security_level = 4;
 
         let proof_commitment = Blake3Hasher::hash(
             &[

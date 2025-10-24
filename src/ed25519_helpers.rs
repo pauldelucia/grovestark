@@ -147,9 +147,12 @@ pub fn create_witness_from_platform_proofs(
     signature_s: &[u8; 32],
     message: &[u8],
 ) -> crate::Result<PrivateInputs> {
+    // Parse document proof to get document paths
     let (docroot_to_state_path, owner_leaf_path) =
         crate::parser::parse_grovedb_proof_full(document_proof)
             .map_err(|e| Error::InvalidInput(format!("Failed to parse document proof: {}", e)))?;
+
+    // Parse key proof to get identity paths
     let (identity_to_state_path, key_leaf_path) =
         crate::parser::parse_grovedb_proof_full(key_proof)
             .map_err(|e| Error::InvalidInput(format!("Failed to parse key proof: {}", e)))?;
