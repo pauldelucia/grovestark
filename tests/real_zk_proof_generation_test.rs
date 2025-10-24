@@ -184,10 +184,6 @@ fn test_generate_zk_proof_with_real_data() {
         "     - Constraint commitment: {} bytes",
         proof.constraint_commitment.len()
     );
-    println!(
-        "     - FRI proof rounds: {} rounds",
-        proof.fri_proof.query_rounds.len()
-    );
     println!("     - Proof of work nonce: {}", proof.pow_nonce);
 
     // Verify the proof

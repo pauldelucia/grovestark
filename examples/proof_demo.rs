@@ -70,7 +70,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("📊 Proof Statistics:");
     println!("   Total size: {} KB", proof_bytes.len() / 1024);
-    println!("   Query rounds: {}", proof.fri_proof.query_rounds.len());
     println!(
         "   Final polynomial degree: {}",
         proof.fri_proof.final_polynomial.len()

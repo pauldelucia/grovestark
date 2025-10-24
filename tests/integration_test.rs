@@ -201,7 +201,6 @@ fn create_dummy_proof() -> grovestark::STARKProof {
         trace_commitment: vec![1u8; 32],
         constraint_commitment: vec![2u8; 32],
         fri_proof: FRIProof {
-            query_rounds: vec![],
             final_polynomial: vec![3u8; 32],
             proof_of_work: 12345,
         },
