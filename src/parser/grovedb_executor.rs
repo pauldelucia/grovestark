@@ -368,40 +368,8 @@ fn decode_op(input: &mut Cursor<&[u8]>) -> Result<Op> {
 
 /// Parse all operations from proof bytes
 pub fn parse_proof_operations(proof_bytes: &[u8]) -> Result<Vec<Op>> {
-    // Skip version byte (0x00) and state root (32 bytes)
-    if proof_bytes.len() < 33 {
-        return Err(Error::Parser("Proof too short".into()));
-    }
-
     // Search for the first operation code in the proof
-    // Operations typically start after some header data
-    let mut start_pos = 33;
-    let mut found_start = false;
-
-    // Look for operation codes (0x01-0x13)
-    while start_pos < proof_bytes.len() && start_pos < 100 {
-        let byte = proof_bytes[start_pos];
-        if (0x01..=0x07).contains(&byte) || (0x10..=0x13).contains(&byte) {
-            // Check if this looks like a valid operation
-            if byte == 0x01 && start_pos + 32 < proof_bytes.len() {
-                // Could be Push(Hash) - check if followed by reasonable data
-                found_start = true;
-                break;
-            } else if byte == 0x10 || byte == 0x11 {
-                // Parent or Child operation
-                found_start = true;
-                break;
-            }
-        }
-        start_pos += 1;
-    }
-
-    if !found_start {
-        println!("[Parser] Warning: Could not find operation start, using default position");
-        start_pos = 37; // Fallback to observed position in test data
-    }
-
-    println!("[Parser] Starting operation parse at byte {}", start_pos);
+    let start_pos = 0;
 
     let mut cursor = Cursor::new(&proof_bytes[start_pos..]);
     let mut operations = Vec::new();
