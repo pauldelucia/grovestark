@@ -12,7 +12,7 @@ use crate::types::PublicInputs;
 /// 2. The message hash is properly formatted
 /// 3. The timestamp is reasonable
 /// 4. Public inputs are cryptographically bound to the proof
-pub fn validate_and_lock_public_inputs(public: &PublicInputs) -> Result<()> {
+pub fn validate_public_inputs(public: &PublicInputs) -> Result<()> {
     // State root must be non-zero
     if public.state_root == [0u8; 32] {
         return Err(Error::InvalidInput("State root cannot be zero".to_string()));
@@ -74,7 +74,7 @@ pub fn bind_public_inputs_to_witness(
     public: &PublicInputs,
 ) -> Result<()> {
     // Validate inputs first
-    validate_and_lock_public_inputs(public)?;
+    validate_public_inputs(public)?;
 
     // Compute and store the commitment
     let _commitment = compute_public_inputs_commitment(public);
@@ -104,29 +104,29 @@ mod tests {
         };
 
         // Should validate
-        assert!(validate_and_lock_public_inputs(&public).is_ok());
+        assert!(validate_public_inputs(&public).is_ok());
 
         // Zero state root should fail
         public.state_root = [0u8; 32];
-        assert!(validate_and_lock_public_inputs(&public).is_err());
+        assert!(validate_public_inputs(&public).is_err());
         public.state_root = [1u8; 32];
 
         // Zero contract ID should fail
         public.contract_id = [0u8; 32];
-        assert!(validate_and_lock_public_inputs(&public).is_err());
+        assert!(validate_public_inputs(&public).is_err());
         public.contract_id = [2u8; 32];
 
         // Zero message hash should fail
         public.message_hash = [0u8; 32];
-        assert!(validate_and_lock_public_inputs(&public).is_err());
+        assert!(validate_public_inputs(&public).is_err());
         public.message_hash = [3u8; 32];
 
         // Invalid timestamp should fail
         public.timestamp = 0;
-        assert!(validate_and_lock_public_inputs(&public).is_err());
+        assert!(validate_public_inputs(&public).is_err());
 
         public.timestamp = 5000000000; // Too far in future
-        assert!(validate_and_lock_public_inputs(&public).is_err());
+        assert!(validate_public_inputs(&public).is_err());
     }
 
     #[test]

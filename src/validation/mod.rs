@@ -1,11 +1,10 @@
 pub mod public_inputs;
 
 use crate::error::{Error, Result};
-use crate::types::{PrivateInputs, PublicInputs, STARKConfig};
+use crate::types::{PrivateInputs, STARKConfig};
 
 pub use public_inputs::{
-    bind_public_inputs_to_witness, compute_public_inputs_commitment,
-    validate_and_lock_public_inputs,
+    bind_public_inputs_to_witness, compute_public_inputs_commitment, validate_public_inputs,
 };
 
 /// Validate witness structure
@@ -70,11 +69,6 @@ pub fn validate_identity_witness(witness: &PrivateInputs) -> Result<()> {
     Ok(())
 }
 
-/// Validate public inputs
-pub fn validate_public_inputs(public: &PublicInputs) -> Result<()> {
-    validate_and_lock_public_inputs(public)
-}
-
 /// Validate STARK configuration
 pub fn validate_config(config: &STARKConfig) -> Result<()> {
     // Check expansion factor is power of 2
@@ -98,34 +92,27 @@ pub fn validate_config(config: &STARKConfig) -> Result<()> {
         ));
     }
 
-    // Enforce production guardrails (release builds). Allow opt-out via env for tooling.
-    #[cfg(not(test))]
-    {
-        let allow_weak = std::env::var("GS_ALLOW_WEAK_PARAMS").unwrap_or_default() == "1";
-        if !allow_weak {
-            const MIN_EXPANSION_FACTOR: usize = 16;
-            const MIN_NUM_QUERIES: usize = 48;
-            const MIN_FOLDING_FACTOR: usize = 4;
+    const MIN_EXPANSION_FACTOR: usize = 16;
+    const MIN_NUM_QUERIES: usize = 48;
+    const MIN_FOLDING_FACTOR: usize = 4;
 
-            if config.expansion_factor < MIN_EXPANSION_FACTOR {
-                return Err(Error::InvalidInput(format!(
-                    "Expansion factor too low for production: {} < {}",
-                    config.expansion_factor, MIN_EXPANSION_FACTOR
-                )));
-            }
-            if config.num_queries < MIN_NUM_QUERIES {
-                return Err(Error::InvalidInput(format!(
-                    "Number of queries too low for production: {} < {}",
-                    config.num_queries, MIN_NUM_QUERIES
-                )));
-            }
-            if config.folding_factor < MIN_FOLDING_FACTOR {
-                return Err(Error::InvalidInput(format!(
-                    "Folding factor too low for production: {} < {}",
-                    config.folding_factor, MIN_FOLDING_FACTOR
-                )));
-            }
-        }
+    if config.expansion_factor < MIN_EXPANSION_FACTOR {
+        return Err(Error::InvalidInput(format!(
+            "Expansion factor too low for production: {} < {}",
+            config.expansion_factor, MIN_EXPANSION_FACTOR
+        )));
+    }
+    if config.num_queries < MIN_NUM_QUERIES {
+        return Err(Error::InvalidInput(format!(
+            "Number of queries too low for production: {} < {}",
+            config.num_queries, MIN_NUM_QUERIES
+        )));
+    }
+    if config.folding_factor < MIN_FOLDING_FACTOR {
+        return Err(Error::InvalidInput(format!(
+            "Folding factor too low for production: {} < {}",
+            config.folding_factor, MIN_FOLDING_FACTOR
+        )));
     }
 
     Ok(())

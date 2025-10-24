@@ -219,8 +219,6 @@ pub struct STARKProof {
 /// Winterfell is stored in `final_polynomial` for verification.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FRIProof {
-    /// Query rounds - not used when storing Winterfell proofs
-    pub query_rounds: Vec<QueryRound>,
     /// Contains the complete Winterfell STARK proof bytes
     pub final_polynomial: Vec<u8>,
     /// Proof of work nonce for additional security

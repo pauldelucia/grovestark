@@ -106,14 +106,6 @@ pub fn deserialize_proof(data: &[u8]) -> Result<STARKProof> {
 
 /// Serialize FRI proof component
 fn serialize_fri_proof<W: Write>(writer: &mut W, fri_proof: &FRIProof) -> Result<()> {
-    // Write number of query rounds
-    writer.write_all(&(fri_proof.query_rounds.len() as u32).to_le_bytes())?;
-
-    // Write each query round
-    for round in &fri_proof.query_rounds {
-        serialize_query_round(writer, round)?;
-    }
-
     // Write final polynomial
     write_bytes(writer, &fri_proof.final_polynomial)?;
 
@@ -152,7 +144,6 @@ fn deserialize_fri_proof<R: Read>(reader: &mut R) -> Result<FRIProof> {
     let proof_of_work = u64::from_le_bytes(pow_bytes);
 
     Ok(FRIProof {
-        query_rounds,
         final_polynomial,
         proof_of_work,
     })
@@ -350,19 +341,6 @@ fn estimate_proof_size(proof: &STARKProof) -> usize {
     size += 4 + proof.trace_commitment.len();
     size += 4 + proof.constraint_commitment.len();
     size += 4; // Number of query rounds
-
-    for round in &proof.fri_proof.query_rounds {
-        size += 4; // Leaf index
-        size += 4; // Number of auth paths
-        for path in &round.authentication_paths {
-            size += 4 + path.len() * 32;
-        }
-        size += 4; // Number of evaluations
-        for eval in &round.evaluations {
-            size += 4 + eval.len();
-        }
-    }
-
     size += 4 + proof.fri_proof.final_polynomial.len();
     size += 8; // Proof of work
     size += 8; // POW nonce
@@ -426,11 +404,6 @@ mod tests {
             trace_commitment: vec![1u8; 32],
             constraint_commitment: vec![2u8; 32],
             fri_proof: FRIProof {
-                query_rounds: vec![QueryRound {
-                    leaf_index: 0,
-                    authentication_paths: vec![vec![[3u8; 32]]],
-                    evaluations: vec![vec![4u8; 16]],
-                }],
                 final_polynomial: vec![5u8; 64],
                 proof_of_work: 12345,
             },
