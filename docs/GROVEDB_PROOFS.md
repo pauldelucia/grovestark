@@ -8,11 +8,10 @@ This document explains how layered GroveDB proofs are handled, parsed, and bound
 - `src/parser/` provides:
   - `proof_decoder.rs`: decodes raw DET/SDK proof formats into intermediate operations
   - `proof_extractor.rs`: utilities to extract sibling lists and closest identity IDs
-  - `grovedb_executor.rs`: executes parsed operations into a Merkle tree state model and yields `MerkleNode` sequences
+  - `grovedb_executor.rs`: uses Merk's decoder to interpret layered proofs and emit `MerkleNode` sequences
 
 Key entry points:
-- `parse_grovedb_nodes(proof_bytes)` → `Vec<MerkleNode>` for Merkle path windows
-- `parse_proof_operations(...)` / `execute_proof(...)` implement a small interpreter to derive state transitions from the proof
+- `parse_grovedb_nodes(proof_bytes)` → `Vec<MerkleNode>` for Merkle path windows (using Merk's `Decoder`)
 
 ## Binding to the Circuit
 
@@ -35,4 +34,3 @@ Key entry points:
 - The prover computes a public `proof_commitment` (see `src/prover/mod.rs`) as a BLAKE3 hash of:
   - `document_cbor || owner_id || state_root`
 - This commitment is part of `PublicOutputs` and is verified in the host-side verification logic before delegating to Winterfell’s verification.
-
