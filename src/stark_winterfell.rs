@@ -15,6 +15,7 @@ use winterfell::{
 
 // use crate::winterfell_ext::LdeGuard;
 
+use crate::circuits::CircuitId;
 use crate::error::{Error, Result};
 use crate::types::{PrivateInputs, PublicInputs, STARKConfig};
 extern crate alloc;
@@ -3524,7 +3525,14 @@ pub fn generate_proof(
     witness: &PrivateInputs,
     public_inputs: &PublicInputs,
     config: &STARKConfig,
+    circuit: CircuitId,
 ) -> Result<Vec<u8>> {
+    if circuit != CircuitId::ContractMembership {
+        return Err(Error::ProvingFailed(format!(
+            "Circuit {:?} is not supported yet",
+            circuit
+        )));
+    }
     #[cfg(debug_assertions)]
     {
         eprintln!("=== generate_proof() starting ===");
@@ -3623,7 +3631,14 @@ pub fn verify_proof(
     proof_bytes: &[u8],
     public_inputs: &PublicInputs,
     config: &STARKConfig,
+    circuit: CircuitId,
 ) -> Result<bool> {
+    if circuit != CircuitId::ContractMembership {
+        return Err(Error::VerificationFailed(format!(
+            "Circuit {:?} is not supported yet",
+            circuit
+        )));
+    }
     // Deserialize the proof
     let proof = Proof::from_bytes(proof_bytes)
         .map_err(|e| Error::InvalidProofFormat(format!("Failed to deserialize proof: {}", e)))?;

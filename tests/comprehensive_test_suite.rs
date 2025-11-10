@@ -15,20 +15,15 @@ use std::time::{Duration, Instant};
 /// Test configuration for all tests
 /// Uses reduced security parameters for faster testing
 fn test_config() -> STARKConfig {
-    // Allow weaker parameters for test speed
+    // Allow fast-path toggles for parts of the prover that check these env vars.
     std::env::set_var("GS_ALLOW_WEAK_PARAMS", "1");
     std::env::set_var("FAST_TESTS", "1");
-    STARKConfig {
-        field_bits: 64,
-        expansion_factor: 8,
-        num_queries: 10, // Minimum for tests (production: 30)
-        folding_factor: 4,
-        grinding_bits: 8,          // Much faster for testing (production: 24)
-        trace_length: 65536, // Required for all phases (BLAKE3: 3584, Merkle: 16384, EdDSA: 32768)
-        num_trace_columns: 104, // Must match production setting
-        max_remainder_degree: 255, // Must be one less than power of two
-        security_level: 128,
-    }
+
+    let mut config = STARKConfig::default();
+    // Keep production-level FRI parameters (expansion factor, num queries, etc.)
+    // but relax PoW so tests complete quickly.
+    config.grinding_bits = 8;
+    config
 }
 
 /// Generate valid test witness and return the associated signing key

@@ -3,6 +3,7 @@
 //! This module provides efficient binary serialization for all proof components
 //! with proper versioning and error handling.
 
+use crate::circuits::CircuitId;
 use crate::error::{Error, Result};
 use crate::types::{FRIProof, PublicInputs, PublicOutputs, QueryRound, STARKProof};
 use std::io::{Read, Write};
@@ -15,6 +16,13 @@ const PROOF_MAGIC: &[u8; 4] = b"GSPF"; // GroveSTARK Proof Format
 
 /// Serialize a STARK proof to bytes
 pub fn serialize_proof(proof: &STARKProof) -> Result<Vec<u8>> {
+    if proof.circuit != CircuitId::ContractMembership {
+        return Err(Error::Serialization(format!(
+            "Circuit {:?} cannot be serialized with v{} format",
+            proof.circuit, PROOF_VERSION
+        )));
+    }
+
     let mut buffer = Vec::with_capacity(estimate_proof_size(proof));
 
     // Write header
@@ -95,6 +103,7 @@ pub fn deserialize_proof(data: &[u8]) -> Result<STARKProof> {
     }
 
     Ok(STARKProof {
+        circuit: CircuitId::ContractMembership,
         trace_commitment,
         constraint_commitment,
         fri_proof,
@@ -106,6 +115,10 @@ pub fn deserialize_proof(data: &[u8]) -> Result<STARKProof> {
 
 /// Serialize FRI proof component
 fn serialize_fri_proof<W: Write>(writer: &mut W, fri_proof: &FRIProof) -> Result<()> {
+    // We don't currently persist individual query rounds, so encode zero to
+    // keep the format aligned with the deserializer expectations.
+    writer.write_all(&0u32.to_le_bytes())?;
+
     // Write final polynomial
     write_bytes(writer, &fri_proof.final_polynomial)?;
 
@@ -401,6 +414,7 @@ mod tests {
 
     fn create_test_proof() -> STARKProof {
         STARKProof {
+            circuit: CircuitId::ContractMembership,
             trace_commitment: vec![1u8; 32],
             constraint_commitment: vec![2u8; 32],
             fri_proof: FRIProof {

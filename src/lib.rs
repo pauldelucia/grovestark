@@ -26,6 +26,7 @@
 //! contracts without revealing document contents or user identity.
 
 pub mod air;
+pub mod circuits;
 pub mod crypto;
 pub mod ed25519_helpers;
 pub mod error;
@@ -44,6 +45,7 @@ pub mod types;
 pub mod utils;
 pub mod validation;
 
+pub use circuits::CircuitId;
 pub use error::{Error, Result};
 pub use prover::GroveSTARK;
 pub use types::{

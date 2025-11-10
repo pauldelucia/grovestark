@@ -3,6 +3,7 @@ pub mod document_verifier;
 pub mod fri;
 // Trace generation happens internally in stark_winterfell
 
+use crate::circuits::CircuitId;
 use crate::crypto::Blake3Hasher;
 use crate::error::{Error, Result};
 use crate::types::{
@@ -11,105 +12,47 @@ use crate::types::{
 
 pub struct GroveSTARK {
     config: STARKConfig,
+    circuit: CircuitId,
 }
 
 impl GroveSTARK {
     pub fn new() -> Self {
-        Self::with_config(STARKConfig::default())
+        Self::with_config_and_circuit(STARKConfig::default(), CircuitId::ContractMembership)
     }
 
     pub fn with_config(config: STARKConfig) -> Self {
-        Self { config }
+        Self::with_config_and_circuit(config, CircuitId::ContractMembership)
+    }
+
+    pub fn with_circuit(circuit: CircuitId) -> Self {
+        Self::with_config_and_circuit(STARKConfig::default(), circuit)
+    }
+
+    pub fn with_config_and_circuit(config: STARKConfig, circuit: CircuitId) -> Self {
+        Self { config, circuit }
+    }
+
+    pub fn circuit(&self) -> CircuitId {
+        self.circuit
     }
 
     pub fn prove(&self, witness: PrivateInputs, public_inputs: PublicInputs) -> Result<STARKProof> {
-        // Validate inputs
-        crate::validation::validate_witness(&witness)?;
-        crate::validation::validate_public_inputs(&public_inputs)?;
-        crate::validation::validate_config(&self.config)?;
-
-        // Identity-aware witness validation
-        crate::validation::validate_identity_witness(&witness)?;
-
-        // Compute public outputs
-        let public_outputs = self.compute_outputs(&witness, &public_inputs)?;
-
-        // Generate STARK proof using winterfell
-        let proof_bytes =
-            crate::stark_winterfell::generate_proof(&witness, &public_inputs, &self.config)?;
-
-        // The proof bytes contain the complete winterfell STARK proof
-        // We'll store them directly in our STARKProof structure
-        // The actual commitments and FRI data are embedded in the proof bytes
-
-        // Log proof size for debugging
-        #[cfg(debug_assertions)]
-        eprintln!("Generated proof size: {} bytes", proof_bytes.len());
-
-        // Extract metadata from the winterfell proof for our STARKProof structure
-        // The complete proof is stored in proof_bytes for verification
-        let trace_commitment = if proof_bytes.len() >= 32 {
-            proof_bytes[0..32].to_vec()
-        } else {
-            eprintln!("WARNING: Proof too small for trace commitment extraction");
-            vec![0u8; 32]
-        };
-
-        let constraint_commitment = if proof_bytes.len() >= 64 {
-            proof_bytes[32..64].to_vec()
-        } else {
-            eprintln!("WARNING: Proof too small for constraint commitment extraction");
-            vec![0u8; 32]
-        };
-
-        // Compute proof of work nonce
-        let pow_nonce =
-            self.find_pow_nonce_with_commitments(&trace_commitment, &constraint_commitment);
-
-        let proof = STARKProof {
-            trace_commitment,
-            constraint_commitment,
-            fri_proof: crate::types::FRIProof {
-                final_polynomial: proof_bytes.clone(), // Contains complete winterfell STARK proof
-                proof_of_work: pow_nonce,
-            },
-            pow_nonce,
-            public_inputs: public_inputs.clone(),
-            public_outputs,
-        };
-
-        Ok(proof)
+        match self.circuit {
+            CircuitId::ContractMembership => self.prove_contract_membership(witness, public_inputs),
+        }
     }
 
     pub fn verify(&self, proof: &STARKProof, public_inputs: &PublicInputs) -> Result<bool> {
-        // First do basic checks on the proof structure
-        self.verify_pow(proof)?;
-        self.verify_public_outputs(&proof.public_outputs, public_inputs)?;
-        self.verify_trace_commitment(proof)?;
-
-        // Extract the proof bytes from the FRI proof structure
-        let proof_bytes = &proof.fri_proof.final_polynomial;
-
-        // Verify proof size is reasonable (STARK proofs are typically 50-200KB)
-        if proof_bytes.len() < 1000 {
-            return Err(crate::error::Error::InvalidProofFormat(format!(
-                "Proof too small: {} bytes",
-                proof_bytes.len()
+        if proof.circuit != self.circuit {
+            return Err(crate::error::Error::VerificationFailed(format!(
+                "Circuit mismatch: prover {:?}, verifier {:?}",
+                proof.circuit, self.circuit
             )));
         }
 
-        if proof_bytes.len() > 500_000 {
-            return Err(crate::error::Error::InvalidProofFormat(format!(
-                "Proof too large: {} bytes",
-                proof_bytes.len()
-            )));
+        match self.circuit {
+            CircuitId::ContractMembership => self.verify_contract_membership(proof, public_inputs),
         }
-
-        // Now verify the STARK proof using winterfell
-        let verification_result =
-            crate::stark_winterfell::verify_proof(proof_bytes, public_inputs, &self.config)?;
-
-        Ok(verification_result)
     }
 
     fn verify_pow(&self, proof: &STARKProof) -> Result<()> {
@@ -141,7 +84,11 @@ impl GroveSTARK {
         Ok(())
     }
 
-    fn verify_public_outputs(&self, outputs: &PublicOutputs, _inputs: &PublicInputs) -> Result<()> {
+    fn verify_contract_membership_public_outputs(
+        &self,
+        outputs: &PublicOutputs,
+        _inputs: &PublicInputs,
+    ) -> Result<()> {
         if !outputs.verified {
             return Err(Error::VerificationFailed(
                 "Public outputs indicate verification failed".into(),
@@ -198,10 +145,106 @@ impl GroveSTARK {
             individual_proofs,
             batch_commitment,
             aggregated_proof: None,
+            circuit: self.circuit,
         })
     }
 
-    fn compute_outputs(
+    fn prove_contract_membership(
+        &self,
+        witness: PrivateInputs,
+        public_inputs: PublicInputs,
+    ) -> Result<STARKProof> {
+        // Validate inputs
+        crate::validation::validate_witness(&witness)?;
+        crate::validation::validate_public_inputs(&public_inputs)?;
+        crate::validation::validate_config(&self.config)?;
+
+        // Identity-aware witness validation
+        crate::validation::validate_identity_witness(&witness)?;
+
+        // Compute public outputs
+        let public_outputs = self.compute_contract_membership_outputs(&witness, &public_inputs)?;
+
+        // Generate STARK proof using winterfell
+        let proof_bytes = crate::stark_winterfell::generate_proof(
+            &witness,
+            &public_inputs,
+            &self.config,
+            self.circuit,
+        )?;
+
+        #[cfg(debug_assertions)]
+        eprintln!("Generated proof size: {} bytes", proof_bytes.len());
+
+        let trace_commitment = if proof_bytes.len() >= 32 {
+            proof_bytes[0..32].to_vec()
+        } else {
+            eprintln!("WARNING: Proof too small for trace commitment extraction");
+            vec![0u8; 32]
+        };
+
+        let constraint_commitment = if proof_bytes.len() >= 64 {
+            proof_bytes[32..64].to_vec()
+        } else {
+            eprintln!("WARNING: Proof too small for constraint commitment extraction");
+            vec![0u8; 32]
+        };
+
+        let pow_nonce =
+            self.find_pow_nonce_with_commitments(&trace_commitment, &constraint_commitment);
+
+        let proof = STARKProof {
+            circuit: self.circuit,
+            trace_commitment,
+            constraint_commitment,
+            fri_proof: crate::types::FRIProof {
+                final_polynomial: proof_bytes.clone(),
+                proof_of_work: pow_nonce,
+            },
+            pow_nonce,
+            public_inputs: public_inputs.clone(),
+            public_outputs,
+        };
+
+        Ok(proof)
+    }
+
+    fn verify_contract_membership(
+        &self,
+        proof: &STARKProof,
+        public_inputs: &PublicInputs,
+    ) -> Result<bool> {
+        self.verify_pow(proof)?;
+        self.verify_contract_membership_public_outputs(&proof.public_outputs, public_inputs)?;
+        self.verify_trace_commitment(proof)?;
+
+        let proof_bytes = &proof.fri_proof.final_polynomial;
+
+        if proof_bytes.len() < 1000 {
+            return Err(crate::error::Error::InvalidProofFormat(format!(
+                "Proof too small: {} bytes",
+                proof_bytes.len()
+            )));
+        }
+
+        if proof_bytes.len() > 500_000 {
+            return Err(crate::error::Error::InvalidProofFormat(format!(
+                "Proof too large: {} bytes",
+                proof_bytes.len()
+            )));
+        }
+
+        let verification_result = crate::stark_winterfell::verify_proof(
+            proof_bytes,
+            public_inputs,
+            &self.config,
+            self.circuit,
+        )?;
+
+        Ok(verification_result)
+    }
+
+    fn compute_contract_membership_outputs(
         &self,
         witness: &PrivateInputs,
         public: &PublicInputs,
