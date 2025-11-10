@@ -198,6 +198,7 @@ fn create_dummy_proof() -> grovestark::STARKProof {
     use grovestark::types::FRIProof;
 
     grovestark::STARKProof {
+        circuit: grovestark::CircuitId::ContractMembership,
         trace_commitment: vec![1u8; 32],
         constraint_commitment: vec![2u8; 32],
         fri_proof: FRIProof {
@@ -231,8 +232,6 @@ fn test_alpha_basis_probe() {
 
     let mut config = STARKConfig::default();
     config.grinding_bits = 2;
-    config.num_queries = 5;
-    config.expansion_factor = 16;
 
     let (witness, public_inputs) = load_pass_fixture();
 
@@ -265,8 +264,6 @@ fn test_merkle_msg_constraints_work() {
 
     let mut config = STARKConfig::default();
     config.grinding_bits = 2;
-    config.num_queries = 5;
-    config.expansion_factor = 16;
     let prover = GroveSTARK::with_config(config);
 
     let (witness, public_inputs) = load_pass_fixture();

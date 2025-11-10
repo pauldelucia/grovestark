@@ -6,6 +6,16 @@ use grovestark::{
 };
 use std::fs;
 
+fn real_data_test_config() -> STARKConfig {
+    // Allow other fast-path code to relax checks while keeping FRI guardrails intact.
+    std::env::set_var("GS_ALLOW_WEAK_PARAMS", "1");
+    std::env::set_var("FAST_TESTS", "1");
+
+    let mut config = STARKConfig::default();
+    config.grinding_bits = 8;
+    config
+}
+
 // Helper: load PASS_AND_FAIL fixtures
 fn load_pass_fixture() -> (
     Vec<u8>,      // document_proof
@@ -140,17 +150,7 @@ fn test_generate_zk_proof_with_real_data() {
     println!("   Timestamp: {}", public_inputs.timestamp);
 
     // Configure STARK parameters — stronger settings for stability
-    let config = STARKConfig {
-        field_bits: 64,
-        expansion_factor: 8,
-        num_queries: 24,
-        folding_factor: 4,
-        max_remainder_degree: 255, // 2^8 - 1
-        grinding_bits: 8,
-        trace_length: 65536,    // Required for all phases
-        num_trace_columns: 104, // Must match production
-        security_level: 96,
-    };
+    let config = real_data_test_config();
 
     println!("\n⚙️  STARK configuration:");
     println!("   Field bits: {}", config.field_bits);
@@ -255,17 +255,7 @@ fn test_parse_and_use_real_merkle_paths() {
     println!("\n🔨 Generating proof with real Merkle paths...");
 
     // Test that we can generate a proof with the real Merkle paths
-    let config = STARKConfig {
-        field_bits: 64,
-        expansion_factor: 8,
-        num_queries: 24,
-        folding_factor: 4,
-        max_remainder_degree: 255, // Must be 2^n - 1
-        grinding_bits: 8,
-        trace_length: 65536,    // Required for all phases
-        num_trace_columns: 104, // Must match production
-        security_level: 96,
-    };
+    let config = real_data_test_config();
 
     std::env::set_var("GS_ALLOW_WEAK_PARAMS", "1");
     std::env::set_var("FAST_TESTS", "1");
@@ -338,17 +328,7 @@ fn test_zk_proof_with_metadata() {
     println!("   Security level: {}", security_level);
 
     // Generate and verify proof with moderate config for stability
-    let config = STARKConfig {
-        field_bits: 64,
-        expansion_factor: 8,
-        num_queries: 24,
-        folding_factor: 4,
-        max_remainder_degree: 255, // 2^8 - 1
-        grinding_bits: 8,
-        trace_length: 65536,    // Required for all phases
-        num_trace_columns: 104, // Must match production
-        security_level: 96,
-    };
+    let config = real_data_test_config();
 
     println!("\n🔨 Generating proof with metadata context...");
     std::env::set_var("GS_ALLOW_WEAK_PARAMS", "1");

@@ -1,3 +1,4 @@
+use crate::circuits::CircuitId;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -204,6 +205,7 @@ pub struct PublicOutputs {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct STARKProof {
+    pub circuit: CircuitId,
     pub trace_commitment: Vec<u8>,
     pub constraint_commitment: Vec<u8>,
     pub fri_proof: FRIProof,
@@ -237,6 +239,7 @@ pub struct BatchProof {
     pub individual_proofs: Vec<STARKProof>,
     pub batch_commitment: [u8; 32],
     pub aggregated_proof: Option<STARKProof>,
+    pub circuit: CircuitId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
