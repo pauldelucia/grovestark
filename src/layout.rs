@@ -1,5 +1,4 @@
 // Single source of truth for column layout
-// As per GUIDANCE.md recommendation
 
 /// Main trace segment layout (width: 132)
 pub struct LayoutMain {

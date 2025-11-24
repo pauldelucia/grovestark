@@ -36,7 +36,7 @@ macro_rules! hotlog {
 // CONSTANTS
 // ================================================================================================
 
-/// Width of the main execution trace (per GUIDANCE.md layout)
+/// Width of the main execution trace
 const MAIN_TRACE_WIDTH: usize = 132; // BLAKE3(32) + quotients(4) + nibbles(16) + control(3) + merkle(17) + identity(24) + selectors(3) + reserved(33)
 
 /// Width of the auxiliary trace (EdDSA + GroveVM)
@@ -54,7 +54,7 @@ struct ConstraintLayout {
 
 const LAYOUT: ConstraintLayout = ConstraintLayout {
     blake3: 0..15,  // 15 BLAKE3 constraints (split commit)
-    merkle: 15..21, // 6 Merkle constraints (2 flags + 4 packed lanes per GUIDANCE.md)
+    merkle: 15..21, // 6 Merkle constraints (2 flags + 4 packed lanes)
     eddsa: 21..22,  // 1 SEL_FINAL constraint
 };
 
@@ -79,7 +79,7 @@ pub const BLAKE3_END: usize = BLAKE3_START + BLAKE3_LEN - 1; // 3583
 pub const MERKLE_END: usize = MERKLE_START + MERKLE_LEN - 1; // 19967
 pub const EDDSA_END: usize = EDDSA_START + EDDSA_LEN - 1; // 52735
 
-// GUIDANCE.md Section A: Merkle MSG column mapping
+// Merkle MSG column mapping
 pub struct MerkleMsgIdx {
     base_lo: usize, // 55
     base_hi: usize, // 64
@@ -102,7 +102,7 @@ pub const MERKLE_MSG: MerkleMsgIdx = MerkleMsgIdx {
     base_hi: 64,
 }; // 63 is skipped for IS_LEFT
 
-// GUIDANCE.md Section B: MsgView for phase-aware message column access
+// MsgView for phase-aware message column access
 pub struct MsgView<E> {
     // gates must already be E (lifted if needed)
     g_doc: E,    // doc hashing window gate (BLAKE3 phase gate)
@@ -121,7 +121,7 @@ impl<E: FieldElement> MsgView<E> {
     }
 }
 
-// ===== Main Segment Column Layout per GUIDANCE.md =====
+// ===== Main Segment Column Layout =====
 // 0..31: BLAKE3 state & message
 pub const V0: usize = 0; // v[0..15] = columns 0..15
 pub const V1: usize = 1;
@@ -163,7 +163,7 @@ pub const SRC_A: usize = 33;
 pub const SRC_B: usize = 34;
 pub const SRC_M: usize = 35;
 
-// 36..51: BLAKE3 nibble lanes (per GUIDANCE.md - no conflict with EdDSA!)
+// 36..51: BLAKE3 nibble lanes
 pub const A_B0: usize = 36;
 pub const A_B1: usize = 37;
 pub const A_B2: usize = 38;
@@ -189,7 +189,7 @@ pub const ROT_CARRY: usize = 52;
 pub const SEL_FINAL: usize = 53;
 pub const CARRY: usize = 54;
 
-// 55..71: Merkle staging/control (per GUIDANCE.md)
+// 55..71: Merkle staging/control
 pub const MERKLE_START_COL: usize = 55;
 // Reserve 17 columns for Merkle operations
 // During BLAKE3 phase:
@@ -229,7 +229,7 @@ pub const COMMIT_STEP_SEL_COLS: [usize; 8] = [100, 101, 102, 103, 104, 105, 106,
 pub const COMMIT_K_SEL_COLS: [usize; 8] = [108, 109, 110, 111, 112, 113, 114, 115];
 
 // ===== Auxiliary Segment Column Layout (in AUX segment, not main!) =====
-// These are now in the AUXILIARY segment per GUIDANCE.md
+// These are now in the AUXILIARY segment
 pub const X_COLS: [usize; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 pub const Y_COLS: [usize; 16] = [
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
@@ -289,11 +289,10 @@ pub const OWNER_ID32_COLS: [usize; 8] = OWNER_ID_COLS;
 pub const IDENTITY_ID32_COLS: [usize; 8] = IDENTITY_ID_COLS;
 pub const DIFF_ID32_COLS: [usize; 8] = DIFF_COLS;
 
-// Selector columns - now in proper positions per GUIDANCE.md
+// Selector columns
 pub const BLAKE3_ACTIVE_COL: usize = SEL_BLAKE3_COL;
 pub const MERKLE_ACTIVE_COL: usize = SEL_MERKLE_COL;
 pub const EDDSA_ACTIVE_COL: usize = SEL_EDDSA_COL;
-// DIFF_ACC_COL already defined above
 
 pub const JOIN_ROW: usize = 16384; // Row where we check (after Merkle paths complete)
 
@@ -407,12 +406,12 @@ pub struct GroveAir {
     public_inputs: GrovePublicInputs,
     /// Resolved periodic indices (frozen at AIR construction)
     per: PeriodicIdx,
-    /// Deterministic gamma for lane packing (GUIDANCE.md Section A1)
+    /// Deterministic gamma for lane packing
     gamma: BaseElement,
 }
 
 impl GroveAir {
-    /// Calculate deterministic public gamma from AIR parameters (GUIDANCE.md Section A1)
+    /// Calculate deterministic public gamma from AIR parameters
     fn calculate_lane_pack_gamma(trace_len: usize, options: &ProofOptions) -> BaseElement {
         // Domain separation + public parameters
         let mut hasher = blake3::Hasher::new();
@@ -438,7 +437,7 @@ impl GroveAir {
         val_bytes.copy_from_slice(&bytes[0..8]);
         let mut gamma = BaseElement::new(u64::from_le_bytes(val_bytes));
 
-        // Ensure gamma ∉ {0, 1} per GUIDANCE.md
+        // Ensure gamma ∉ {0, 1}
         if gamma == BaseElement::ZERO || gamma == BaseElement::ONE {
             gamma = gamma + BaseElement::ONE + BaseElement::ONE; // Make it 2
         }
@@ -447,7 +446,7 @@ impl GroveAir {
         gamma
     }
 
-    /// CE-parity probe for debugging (GUIDANCE.md Section C)
+    /// CE-parity probe for debugging
     #[allow(dead_code)]
     fn ce_parity_probe<E: FieldElement>(&self, _where: &str, _vec: &[E]) {
         // Only active with wf_dbg feature
@@ -516,7 +515,7 @@ impl Air for GroveAir {
         // 3: SRC_M quotient (g * S)
         // 4: ACC recurrence (g * S)
         // 5: commit no-writes K0..K6 (masked)
-        // 6: commit target at S7 (g * S * GW) — TEMPORARILY DISABLED; see BLAKE3_C6_OOD.md
+        // 6: commit target at S7 (g * S * GW) — TEMPORARILY DISABLED
         // 7: commit balance at K7 (masked)
         // 8: reset ACC at K0 (g * S * K0)
         // 9: adders (g * S)
@@ -537,7 +536,7 @@ impl Air for GroveAir {
             main_degrees.push(TransitionConstraintDegree::with_cycles(2, vec![2]));
         }
 
-        // GUIDANCE.md Fix #4: Lock the counts with assertions
+        // Lock the counts with assertions
         assert_eq!(
             main_degrees.len(),
             LAYOUT.eddsa.end,
@@ -546,7 +545,7 @@ impl Air for GroveAir {
 
         // Single-segment AIR context
         // Create with standard constructor then set exemptions
-        // Calculate deterministic gamma for lane packing (GUIDANCE.md Section A1)
+        // Calculate deterministic gamma for lane packing
         let gamma = Self::calculate_lane_pack_gamma(trace_info.length(), &options);
 
         eprintln!("[AIR::new] ProofOptions for gamma calculation:");
@@ -614,14 +613,14 @@ impl Air for GroveAir {
             );
         }
 
-        // Guardrail assertions per GUIDANCE.md
+        // Guardrail assertions
         assert_eq!(
             main_degrees.len(),
             NUM_CONSTRAINTS,
             "Constraint count mismatch"
         );
 
-        // GUIDANCE.md Section E: Verify MERKLE_MSG mapping
+        // Verify MERKLE_MSG mapping
         for k in 0..16 {
             let c = MERKLE_MSG.col(k);
             assert!(c != 63, "MERKLE_MSG mapping must skip IS_LEFT (63)");
@@ -644,7 +643,7 @@ impl Air for GroveAir {
             );
         }
 
-        // Verify exemptions per GUIDANCE.md
+        // Verify exemptions
         assert!(
             context.num_transition_exemptions() >= 1,
             "Exemptions must be at least 1 for next() usage"
@@ -659,7 +658,7 @@ impl Air for GroveAir {
             m_hold: P_M_HOLD, // 6: Merkle HOLD sub-phase
         };
 
-        // Add invariant checks per GUIDANCE.md Section 1
+        // Add invariant checks
         assert_eq!(
             main_degrees.len(),
             NUM_CONSTRAINTS,
@@ -744,7 +743,7 @@ impl Air for GroveAir {
         let mut p_e = vec![BaseElement::ZERO; n];
         let mut p_r = vec![BaseElement::ZERO; n];
 
-        // Merkle sub-phase selectors (NEW for GUIDANCE.md Section 2)
+        // Merkle sub-phase selectors
         let mut p_m_load = vec![BaseElement::ZERO; n];
         let mut p_m_comp = vec![BaseElement::ZERO; n];
         let mut p_m_hold = vec![BaseElement::ZERO; n];
@@ -1123,7 +1122,7 @@ impl Air for GroveAir {
             }
         }
 
-        // GUIDANCE.md Section 1: Assertions and zero-init
+        // Assertions and zero-init
         assert_eq!(
             result.len(),
             NUM_CONSTRAINTS,
@@ -1133,7 +1132,7 @@ impl Air for GroveAir {
             *x = E::ZERO;
         }
 
-        // GUIDANCE.md: Use slices to prevent index drift
+        // Use slices to prevent index drift
         // Each phase writes to its own slice starting at index 0
         if !LAYOUT.blake3.is_empty() {
             let blake3_slice = result.get_mut(LAYOUT.blake3.clone()).unwrap();
@@ -1170,7 +1169,7 @@ impl Air for GroveAir {
             "constraint vector length drift"
         );
 
-        // CE-parity probe at the end (GUIDANCE.md Section C)
+        // CE-parity probe at the end
         self.ce_parity_probe("evaluate_transition_end", result);
 
         return;
@@ -1179,7 +1178,7 @@ impl Air for GroveAir {
             // MULTI-SEGMENT: Check if we have auxiliary columns
             // If so, EdDSA values come from auxiliary frame
 
-            // CRITICAL: Zero the result buffer (researcher's fix #1)
+            // Zero the result buffer (researcher's fix #1)
             for r in result.iter_mut() {
                 *r = E::ZERO;
             }
@@ -1274,9 +1273,6 @@ impl Air for GroveAir {
             // Gates we reuse (committed step selectors)
             let s_add = s(0) + s(2) + s(4) + s(6);
             let _s_xor = s(1) + s(3) + s(5) + s(7);
-            // RESEARCHER FIX: Remove any_s - it's neutral on-grid but not at OOD point
-            // let any_s = s_add + s_xor;  // REMOVED
-            // let gate = g * any_s;       // REMOVED
             let _k0 = k(0);
 
             // Build linear views of current words and messages
@@ -1284,7 +1280,7 @@ impl Air for GroveAir {
             let v_next: Vec<E> = (0..16).map(|j| nxt[V0 + j]).collect();
             let _m_cur: Vec<E> = (0..16).map(|j| cur[MSG0 + j]).collect();
 
-            // GUIDANCE.md Section B: Build MsgView for phase-aware message access
+            // Build MsgView for phase-aware message access
             let s_b = periodic[P_B]; // BLAKE3/doc phase gate
             let p_m = periodic[P_M]; // Merkle phase gate
             let p_m_comp = periodic[P_M_COMP]; // Merkle COMP sub-phase
@@ -1308,12 +1304,10 @@ impl Air for GroveAir {
             ] {
                 bits_binarity += cur[b] * (cur[b] - E::ONE);
             }
-            // RESEARCHER FIX: Only use g, not gate (which had any_s)
             result[ci] = any_s * bits_binarity;
             ci += 1;
 
             // (2–4) quotient chains for SRC_A / SRC_B / SRC_M
-            // RESEARCHER FIX: Remove any_s entirely, use Shape B1
             let mut acc_a = E::ZERO;
             let mut acc_b = E::ZERO;
             for ki in 0..7 {
@@ -1340,7 +1334,6 @@ impl Air for GroveAir {
             ci += 1;
 
             // (5) ACC recurrence: nxt[ACC] = cur[ACC] + z_nib * p16_for_step
-            // RESEARCHER FIX: Remove any_s entirely
             let p16_for_step = (s(0) + s(2) + s(4) + s(6)) * p16
                 + s(1) * p16s4
                 + s(3) * p16s3
@@ -1392,14 +1385,12 @@ impl Air for GroveAir {
             ci += 1;
 
             // (7) reset ACC at the start of every nibble scan block
-            // RESEARCHER FIX: Remove any_s
             result[ci] = g * k(0) * cur[ACC];
             ci += 1;
 
             // (8) adders (S0,S2,S4,S6):  z + 16*c' = a + b + m_used + c
             let m_used = s_m * m_nib; // zero on S2/S6
             let add_res = z_nib + sixteen * nxt[CARRY] - (a_nib + b_nib + m_used + cur[CARRY]);
-            // RESEARCHER FIX: s_add is already a sum of one-hots, g gates to BLAKE3 phase
             result[ci] = g * s_add * add_res;
             ci += 1;
 
@@ -1412,7 +1403,6 @@ impl Air for GroveAir {
                 + xor_bit(A_B1, B_B1, Z_B1)
                 + xor_bit(A_B2, B_B2, Z_B2)
                 + xor_bit(A_B3, B_B3, Z_B3);
-            // RESEARCHER FIX: s_xor_135 is already specific one-hots summed
             result[ci] = g * s_xor_135 * xor_res;
             ci += 1;
 
@@ -1735,7 +1725,7 @@ impl Air for GroveAir {
             }
         }
 
-        // Optional debug hash per GUIDANCE.md
+        // Optional debug hash
         #[cfg(debug_assertions)]
         {
             use blake3::Hasher;
@@ -1853,7 +1843,7 @@ fn compute_r_plus_n(r: &[u16; 16]) -> [u16; 16] {
 // TRACED COIN FOR DEBUGGING
 // ================================================================================================
 
-/// GUIDANCE.md: Tracing wrapper to debug random coin lifecycle
+/// Tracing wrapper to debug random coin lifecycle
 pub struct TracedCoin<C>(C);
 
 impl<C: winterfell::crypto::RandomCoin> winterfell::crypto::RandomCoin for TracedCoin<C> {
@@ -1968,7 +1958,7 @@ impl GroveProver {
         self
     }
 
-    /// Build the complete execution trace from witness (multi-segment per GUIDANCE.md)
+    /// Build the complete execution trace from witness (multi-segment)
     pub fn build_trace(
         &self,
         witness: &PrivateInputs,
@@ -1999,7 +1989,7 @@ impl GroveProver {
             }
         }
 
-        // MULTI-SEGMENT SOLUTION per GUIDANCE.md:
+        // MULTI-SEGMENT SOLUTION
         // Build main trace ONLY (132 columns)
         // Aux trace will be built in build_aux_trace callback
         let mut main_columns =
@@ -2156,8 +2146,8 @@ impl GroveProver {
         aux_columns: &mut [Vec<BaseElement>],
         _witness: &PrivateInputs, // Not needed for aux columns anymore
     ) -> Result<()> {
-        // CRITICAL: Initialize ALL EdDSA columns in auxiliary segment to zero
-        // Per GUIDANCE.md: EdDSA X,Y,Z,T are in auxiliary columns 0-63
+        // Initialize ALL EdDSA columns in auxiliary segment to zero
+        // EdDSA X,Y,Z,T are in auxiliary columns 0-63
         let trace_len = self.config.trace_length;
 
         // Initialize X columns (aux 0-15) to zero everywhere
@@ -2786,7 +2776,7 @@ fn evaluate_blake3_phase<E: FieldElement<BaseField = BaseElement>>(
     let two = E::ONE + E::ONE;
     let sixteen = E::from(16u32);
 
-    // GUIDANCE.md Section B: Build MsgView for phase-aware message access
+    // Build MsgView for phase-aware message access
     // Use periodic gates to select between doc MSG columns and Merkle MSG scratch during COMP.
     // Keep selectors S/K committed; avoid multiplying constraints by periodic gates elsewhere.
     let s_b = periodic[P_B];
@@ -2800,7 +2790,7 @@ fn evaluate_blake3_phase<E: FieldElement<BaseField = BaseElement>>(
         merkle_msg: MERKLE_MSG,
     };
 
-    // Build lane-specific nibbles without k(i) anywhere (GUIDANCE.md lines 101-105)
+    // Build lane-specific nibbles without k(i) anywhere
     // Keep ASRC/BSRC/MX/MY periodic picks; they are phase-locked and consistent at OOD.
     let asrc = |t: usize, j: usize| periodic[P_ASRC0 + t * 16 + j];
     let bsrc = |t: usize, j: usize| periodic[P_BSRC0 + t * 16 + j];
@@ -2813,7 +2803,7 @@ fn evaluate_blake3_phase<E: FieldElement<BaseField = BaseElement>>(
     let mut z_nib_i = [E::ZERO; 8];
 
     // Build lane-specific nibbles from V values using source pickers
-    // GUIDANCE.md: a_nib_i := Σ_source S_source(i) · nibble_from_source
+    // a_nib_i := Σ_source S_source(i) · nibble_from_source
     // Since V[j] are already 4-bit nibbles, and ASRC/BSRC select from them:
     for i in 0..8 {
         // a_nib_i[i] = sum over j of: asrc(i,j) * V[j]
@@ -2870,14 +2860,10 @@ fn evaluate_blake3_phase<E: FieldElement<BaseField = BaseElement>>(
     let s_add = s(0) + s(2) + s(4) + s(6);
     // XOR applies on S1, S3, S5 only; S7 handled by rot7 constraint
     let _s_xor = s(1) + s(3) + s(5);
-    // RESEARCHER FIX: Remove any_s and k_not7_sum; no explicit k7 binding needed
 
     // Build linear views
     let v_next: Vec<E> = (0..16).map(|j| nxt[V0 + j]).collect();
 
-    // Optional diagnostics:
-    //  - Enable only a single BLAKE3 constraint by index (0..14) via GS_B3_ONLY_IDX
-    //  - Or enable a set of indices via GS_B3_ENABLE_INDICES (comma-separated list)
     let mut b3_only_idx: Option<usize> = None;
     let mut b3_enable_set: Option<[bool; 15]> = None;
     if let Ok(val) = std::env::var("GS_B3_ONLY_IDX") {
@@ -2924,7 +2910,7 @@ fn evaluate_blake3_phase<E: FieldElement<BaseField = BaseElement>>(
 
     // (2-4) quotient chains - Emit constraints with proper S·K gating
 
-    // Lane-probe diagnostic (GUIDANCE.md lines 86-97)
+    // Lane-probe diagnostic
     if std::env::var("GS_LANE_PROBE").is_ok() {
         // Compute both sides at OOD point z to verify the fix
         let lhs = (0..7)
@@ -3003,7 +2989,6 @@ fn evaluate_blake3_phase<E: FieldElement<BaseField = BaseElement>>(
 
     // (ii) commit equality — enforce at next-row using next-row committed gates
     // Use only next-row values for gating and operands to avoid cur/nxt drift.
-    // Transition form disabled in favor of boundary-only enforcement
     let c6_val = E::ZERO;
     {
         use core::cmp::min;
@@ -3154,7 +3139,7 @@ fn evaluate_blake3_phase<E: FieldElement<BaseField = BaseElement>>(
     }
 }
 
-/// Evaluate Merkle constraints with lane packing (GUIDANCE.md Section A1)
+/// Evaluate Merkle constraints with lane packing
 fn evaluate_merkle_stub<E: FieldElement<BaseField = BaseElement> + ExtensionOf<BaseElement>>(
     result: &mut [E],
     frame: &EvaluationFrame<E>,
@@ -3183,7 +3168,7 @@ impl Prover for GroveProver {
     type Trace = TraceTable<BaseElement>; // Use TraceTable directly (Pattern A)
     type HashFn = Blake3_256<Self::BaseField>;
     type VC = winterfell::crypto::MerkleTree<Self::HashFn>;
-    // GUIDANCE.md: Use TracedCoin to debug random coin lifecycle
+    // Use TracedCoin to debug random coin lifecycle
     type RandomCoin = TracedCoin<DefaultRandomCoin<Self::HashFn>>;
     type TraceLde<E: FieldElement<BaseField = Self::BaseField>> =
         DefaultTraceLde<E, Self::HashFn, Self::VC>;
@@ -3251,14 +3236,13 @@ impl Prover for GroveProver {
         aux_rand_elements: Option<AuxRandElements<E>>,
         composition_coefficients: ConstraintCompositionCoefficients<E>,
     ) -> Self::ConstraintEvaluator<'a, E> {
-        // GUIDANCE.md Check 1: Prove the coefficients aren't zero
-        // Note: API varies by winterfell version, let's check what we can access
+        // Prove the coefficients aren't zero
         eprintln!("🔍 DEBUG: composition_coefficients available - checking if they're zero");
 
         // Try to access coefficients - this will help us understand the API
         // For now, let's assume they exist and continue with other checks
 
-        // GUIDANCE.md Check 2: Confirm constraint counts match
+        // Confirm constraint counts match
         eprintln!(
             "🔍 DEBUG: air.num_transition_constraints = {}",
             air.context().num_transition_constraints()
@@ -3280,7 +3264,6 @@ impl Prover for GroveProver {
     where
         E: FieldElement<BaseField = Self::BaseField>,
     {
-        // GUIDANCE.md: 1 composition column is NORMAL, not the bug
         eprintln!(
             "DEBUG: build_constraint_commitment called with {} columns (normal for single-segment)",
             num_constraint_composition_columns

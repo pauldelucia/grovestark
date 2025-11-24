@@ -55,7 +55,7 @@ pub fn bytes_to_limbs(bytes: &[u8; 32]) -> [u64; 16] {
 }
 
 // Helper function to store an extended point
-// Per GUIDANCE.md: ALL EdDSA coordinates (X,Y,Z,T) are in auxiliary segment
+// ALL EdDSA coordinates (X,Y,Z,T) are in auxiliary segment
 // This function is now a no-op for the main trace
 pub fn store_extended_point(_trace: &mut [Vec<BaseElement>], _row: usize, _point: &ExtendedPoint) {
     // Do nothing - EdDSA coordinates are stored separately and written to auxiliary trace

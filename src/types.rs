@@ -277,7 +277,7 @@ impl Default for STARKConfig {
         }
         #[cfg(not(test))]
         {
-            // Production defaults per GUIDANCE.md recommendations
+            // Production defaults
             Self {
                 field_bits: 64,
                 expansion_factor: 16,      // stronger FRI soundness

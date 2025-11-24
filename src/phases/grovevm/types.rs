@@ -3,7 +3,6 @@
 use winterfell::math::fields::f64::BaseElement;
 
 // ===== Column Layout for GroveVM Auxiliary Trace =====
-// Per GROVEVM_IMPLEMENTATION_PLAN.md
 
 // Opcode one-hot encoding (4 columns)
 pub const OP_PUSH_H: usize = 0; // Push hash
@@ -174,7 +173,6 @@ pub fn limbs_to_elements(limbs: &[u32; 8]) -> [BaseElement; 8] {
 }
 
 /// Compute deterministic gamma for lane packing
-/// Per GROVEVM_IMPLEMENTATION_PLAN.md
 pub fn compute_deterministic_gamma(
     domain_size: usize,
     lde_factor: usize,

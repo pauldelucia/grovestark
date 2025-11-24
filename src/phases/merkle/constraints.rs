@@ -8,7 +8,7 @@
 
 use winterfell::math::{fields::f64::BaseElement, FieldElement};
 
-/// Carrier for resolved periodic values per GUIDANCE.md Section 1
+/// Carrier for resolved periodic values
 #[derive(Copy, Clone)]
 pub struct MerklePer<E> {
     pub p_m: E,
@@ -27,7 +27,7 @@ pub fn evaluate_merkle_constraints<E: FieldElement<BaseField = BaseElement>>(
     next: &[E],
     per: MerklePer<E>,
 ) {
-    // GUIDANCE.md Section 2: Complete Merkle constraint set
+    // Complete Merkle constraint set
     // Column indices
     const IS_LEFT_FLAG: usize = 63;
     // const MSG0: usize = 16; // MSG0 column (unused in current constraints)
@@ -61,7 +61,7 @@ pub fn evaluate_merkle_constraints<E: FieldElement<BaseField = BaseElement>>(
     result[i] = not_m * is_left;
     i += 1;
 
-    // GUIDANCE.md Section C: HOLD continuity for MERKLE_MSG columns
+    // HOLD continuity for MERKLE_MSG columns
     // Now that Merkle uses scratch columns 55-62,64-71, we can enforce continuity
     // 12 continuity + 12 isolation = 24 MSG constraints (WORKING CONFIG)
     for k in 0..12 {
@@ -71,14 +71,14 @@ pub fn evaluate_merkle_constraints<E: FieldElement<BaseField = BaseElement>>(
         i += 1;
     }
 
-    // GUIDANCE.md Section C: Isolation constraints for MERKLE_MSG columns
+    // Isolation constraints for MERKLE_MSG columns
     // Ensure MERKLE_MSG columns are zero outside Merkle phase
     for k in 0..12 {
         result[i] = not_m * current[crate::stark_winterfell::MERKLE_MSG.col(k)];
         i += 1;
     }
 
-    // Assert we filled exactly the expected number per GUIDANCE.md Section 6
+    // Assert we filled exactly the expected number
     debug_assert_eq!(i, result.len(), "Merkle constraints count mismatch");
 }
 
@@ -87,7 +87,7 @@ pub const fn num_merkle_constraints() -> usize {
     26 // Binary flag (1) + IS_LEFT isolation (1) + MSG continuity (12) + MSG isolation (12)
 }
 
-/// Evaluate Merkle constraints with lane packing (GUIDANCE.md Section A1)
+/// Evaluate Merkle constraints with lane packing
 /// Reduces 24 lane constraints to 4 packed constraints using deterministic gamma
 pub fn evaluate_merkle_constraints_packed<E: FieldElement<BaseField = BaseElement>>(
     result: &mut [E],
@@ -124,7 +124,7 @@ pub fn evaluate_merkle_constraints_packed<E: FieldElement<BaseField = BaseElemen
     result[i] = not_m * is_left;
     i += 1;
 
-    // LANE PACKING per GUIDANCE.md Section A1
+    // LANE PACKING
     // Split lanes into even (0,2,4,6,8,10) and odd (1,3,5,7,9,11)
 
     // Constraint 2: Packed continuity for even lanes

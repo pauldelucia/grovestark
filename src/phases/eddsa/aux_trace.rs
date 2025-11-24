@@ -41,7 +41,7 @@ impl EddsaAuxStorage {
     }
 }
 
-/// Helper functions for writing identity point as recommended by REPORT.md
+/// Helper functions for writing identity point
 fn write_limbs_u16(
     trace: &mut [Vec<BaseElement>],
     cols: &[usize; 16],
@@ -101,9 +101,6 @@ pub fn fill_eddsa_phase_with_aux(
         WINDOW_INDEX_COL,
     };
     use crate::stark_winterfell::EDDSA_END;
-
-    // Per GUIDANCE.md: Do NOT use committed selectors
-    // Leave columns 97-99 as zero
 
     let mut aux_storage = EddsaAuxStorage::new();
 
@@ -182,7 +179,7 @@ pub fn fill_eddsa_phase_with_aux(
         );
     }
 
-    // Use the correct scalar multiplication from REPORT.md
+    // Use the correct scalar multiplication
     let final_ext =
         scalar_mult_correct::eddsa_verify_combine(&s_bytes, &h_bytes, &r_ext, &a_ext, &base_ext);
 
@@ -326,7 +323,7 @@ pub fn fill_eddsa_phase_with_aux(
     }
 
     if is_identity_projective(&final_point) {
-        // Explicitly write identity (0:1:1:0) at EDDSA_END as recommended by REPORT.md
+        // Explicitly write identity (0:1:1:0) at EDDSA_END
         #[cfg(debug_assertions)]
         println!("✅ Writing identity to row {}", EDDSA_END);
         write_identity_row(trace, EDDSA_END);

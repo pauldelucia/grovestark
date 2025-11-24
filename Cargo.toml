@@ -90,7 +90,7 @@ quiet_eval = []   # Disable verbose logging in constraint evaluation
 hotlog = []       # Enable debug logging in hot paths (normally disabled)
 panic_in_transition = []  # Test if evaluate_transition is called in CE pipeline
 must_fail_test = []  # Force constraint evaluation to fail for testing
-fri_only_must_fail = []  # FRI-only must-fail test (GUIDANCE.md)
+fri_only_must_fail = []  # FRI-only must-fail test
 wf_dbg = []  # Enable winterfell debug module for OOD frame debugging
 
 [patch.crates-io]

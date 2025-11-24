@@ -12,9 +12,6 @@ pub fn fill_blake3_phase(
     witness: &PrivateInputs,
     _public_inputs: &PublicInputs,
 ) -> Result<(), crate::error::Error> {
-    // Per GUIDANCE.md: Do NOT use committed selectors
-    // Leave columns 97-99 as zero
-
     // Extract message from witness (document CBOR)
     let mut message = [0u32; 16];
 
@@ -49,7 +46,7 @@ pub fn fill_blake3_compression(
     })
 }
 
-/// GUIDANCE.md Section A: Parameterized BLAKE3 compression with custom message column mapping
+/// Parameterized BLAKE3 compression with custom message column mapping
 pub fn fill_blake3_compression_with_msg_map(
     trace: &mut [Vec<BaseElement>],
     start_row: usize,

@@ -217,8 +217,7 @@ fn create_dummy_proof() -> grovestark::STARKProof {
     }
 }
 
-// GUIDANCE.md Section F: Recommended tests
-// Note: These tests verify the correctness of the MSG separation implementation
+// These tests verify the correctness of the MSG separation implementation
 // by ensuring the proof generation succeeds with the new constraints
 
 #[test]

@@ -1,7 +1,7 @@
 //! GroveVM implementation in the AIR
 //!
 //! This module implements GroveDB proof verification directly in the STARK proof
-//! as a stack machine, according to GUIDANCE.md and GROVEVM_IMPLEMENTATION_PLAN.md
+//! as a stack machine
 
 pub mod blake3_integration;
 pub mod constraints;

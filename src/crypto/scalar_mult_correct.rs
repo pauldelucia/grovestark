@@ -1,5 +1,4 @@
-// Correct 4-bit window scalar multiplication for Ed25519
-// Based on REPORT.md implementation
+// 4-bit window scalar multiplication for Ed25519
 
 use crate::crypto::fe25519_digits as fe;
 
