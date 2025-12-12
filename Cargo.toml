@@ -40,9 +40,6 @@ grovedb = "3.0.0"
 grovedb-merk = { version = "3.0.0", package = "grovedb-merk" }
 grovedb-costs = "3.0.0"
 
-# Dash SDK
-dash-sdk = { git = "https://github.com/dashpay/platform", tag = "v2.0.1" }
-
 # Error handling
 thiserror = "1.0"
 
@@ -92,9 +89,6 @@ panic_in_transition = []  # Test if evaluate_transition is called in CE pipeline
 must_fail_test = []  # Force constraint evaluation to fail for testing
 fri_only_must_fail = []  # FRI-only must-fail test
 wf_dbg = []  # Enable winterfell debug module for OOD frame debugging
-
-[patch.crates-io]
-elliptic-curve-tools = { git = "https://github.com/mikelodder7/elliptic-curve-tools", rev = "c989865fa71503d2cbf5c5795c4ebcf4a2f3221c" }
 
 [profile.release]
 opt-level = 3

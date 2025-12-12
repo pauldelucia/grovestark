@@ -8,8 +8,6 @@ use crate::error::{Error, Result};
 use crate::phases::eddsa::augment_eddsa_witness;
 use crate::types::PrivateInputs;
 use curve25519_dalek::scalar::Scalar;
-use dash_sdk::dpp::platform_value::string_encoding::Encoding;
-use dash_sdk::platform::Identifier;
 use sha2::{Digest, Sha512};
 
 #[cfg(test)]
@@ -236,9 +234,9 @@ fn extract_owner_id_from_document(document_data: &[u8]) -> Result<[u8; 32]> {
         .ok_or_else(|| Error::InvalidInput("Document missing $ownerId field".into()))?;
 
     // Convert base58 string to bytes
-    let owner_id = Identifier::from_string(owner_id_str, Encoding::Base58)
+    let owner_id_bytes = bs58::decode(owner_id_str)
+        .into_vec()
         .map_err(|e| Error::InvalidInput(format!("Failed to decode owner ID: {}", e)))?;
-    let owner_id_bytes = owner_id.as_bytes();
 
     if owner_id_bytes.len() != 32 {
         return Err(Error::InvalidInput(format!(
@@ -248,7 +246,7 @@ fn extract_owner_id_from_document(document_data: &[u8]) -> Result<[u8; 32]> {
     }
 
     let mut owner_id = [0u8; 32];
-    owner_id.copy_from_slice(owner_id_bytes);
+    owner_id.copy_from_slice(&owner_id_bytes);
     Ok(owner_id)
 }
 
