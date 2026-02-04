@@ -103,12 +103,6 @@ panic = "abort"
 [profile.bench]
 inherits = "release"
 
-[alias]
-# Run all tests in release mode with output
-tr = "test --release -- --nocapture"
-# Common subsets
-tr-ci = "test --release -q"
-
 [[bench]]
 name = "quick_benchmarks"
 harness = false
