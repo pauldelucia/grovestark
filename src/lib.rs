@@ -25,6 +25,12 @@
 //! This library provides zero-knowledge proofs of document ownership within
 //! contracts without revealing document contents or user identity.
 
+// Require release mode for tests - debug builds are too slow
+#[cfg(all(test, debug_assertions))]
+compile_error!(
+    "Tests must be run in release mode. Use: cargo t (alias for cargo test --release -- --test-threads=1)"
+);
+
 pub mod air;
 pub mod crypto;
 pub mod ed25519_helpers;

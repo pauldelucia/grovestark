@@ -1,0 +1,8 @@
+[alias]
+# Test aliases for release mode with single thread
+t = "test --release -- --test-threads=1"
+tl = "test --release --lib -- --test-threads=1"
+# Run all tests in release mode with output
+tr = "test --release -- --nocapture"
+# Common subsets
+tr-ci = "test --release -q"
