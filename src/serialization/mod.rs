@@ -117,24 +117,6 @@ fn serialize_fri_proof<W: Write>(writer: &mut W, fri_proof: &FRIProof) -> Result
 
 /// Deserialize FRI proof component
 fn deserialize_fri_proof<R: Read>(reader: &mut R) -> Result<FRIProof> {
-    // Read number of query rounds
-    let mut num_rounds_bytes = [0u8; 4];
-    reader.read_exact(&mut num_rounds_bytes)?;
-    let num_rounds = u32::from_le_bytes(num_rounds_bytes) as usize;
-
-    if num_rounds > 10000 {
-        return Err(Error::InvalidProofFormat(format!(
-            "Too many query rounds: {}",
-            num_rounds
-        )));
-    }
-
-    // Read each query round
-    let mut query_rounds = Vec::with_capacity(num_rounds);
-    for _ in 0..num_rounds {
-        query_rounds.push(deserialize_query_round(reader)?);
-    }
-
     // Read final polynomial
     let final_polynomial = read_bytes(reader)?;
 
