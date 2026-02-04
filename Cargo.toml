@@ -36,8 +36,12 @@ base64 = "0.22"
 bs58 = "0.5"
 
 # GroveDB and Merk decoders
-grovedb = { git = "https://github.com/dashpay/grovedb", rev = "33dfd48a1718160cb333fa95424be491785f1897" }
-grovedb-merk = { git = "https://github.com/dashpay/grovedb", rev = "33dfd48a1718160cb333fa95424be491785f1897" }
+grovedb = { git = "https://github.com/dashpay/grovedb", rev = "33dfd48a1718160cb333fa95424be491785f1897", features = [
+    "verify",
+], default-features = false }
+grovedb-merk = { git = "https://github.com/dashpay/grovedb", rev = "33dfd48a1718160cb333fa95424be491785f1897", features = [
+    "verify",
+], default-features = false }
 grovedb-costs = { git = "https://github.com/dashpay/grovedb", rev = "33dfd48a1718160cb333fa95424be491785f1897" }
 
 # Error handling
@@ -53,7 +57,9 @@ rand = "0.8"
 # Logging
 log = "0.4"
 env_logger = "0.11"
-tracing = { version = "0.1", default-features = false, features = ["attributes"] }
+tracing = { version = "0.1", default-features = false, features = [
+    "attributes",
+] }
 tracing-subscriber = { version = "0.3", features = ["std", "env-filter"] }
 
 # Async runtime
@@ -68,7 +74,9 @@ pretty_assertions = "1.4"
 tempfile = "3.8"
 criterion = "0.5"
 ed25519-dalek = "2.1.1"
-curve25519-dalek = { version = "4", default-features = false, features = ["alloc"] }
+curve25519-dalek = { version = "4", default-features = false, features = [
+    "alloc",
+] }
 rand_core = "0.6"
 rand_chacha = "0.3"
 hex = "0.4"
@@ -76,20 +84,22 @@ hex = "0.4"
 [features]
 default = []
 bench = ["criterion"]
-weak-params = []  # Allow weaker security params (alternative to GS_ALLOW_WEAK_PARAMS=1 env var)
+weak-params = [
+] # Allow weaker security params (alternative to GS_ALLOW_WEAK_PARAMS=1 env var)
 tripwire = []
 tripwire_perf = []
-validate_trace = []  # Enable trace validation (slow, use only for debugging)
-assertion_sentinel = []  # Add impossible boundary assertion to test if assertions are enforced
+validate_trace = [] # Enable trace validation (slow, use only for debugging)
+assertion_sentinel = [
+] # Add impossible boundary assertion to test if assertions are enforced
 # OPTIMIZATIONS
-short_trace = []  # Use 16384 rows instead of 65536 for faster debugging
-skip_eddsa = []   # Skip EdDSA phase for Merkle/BLAKE3 debugging
-quiet_eval = []   # Disable verbose logging in constraint evaluation
-hotlog = []       # Enable debug logging in hot paths (normally disabled)
-panic_in_transition = []  # Test if evaluate_transition is called in CE pipeline
-must_fail_test = []  # Force constraint evaluation to fail for testing
+short_trace = []         # Use 16384 rows instead of 65536 for faster debugging
+skip_eddsa = []          # Skip EdDSA phase for Merkle/BLAKE3 debugging
+quiet_eval = []          # Disable verbose logging in constraint evaluation
+hotlog = []              # Enable debug logging in hot paths (normally disabled)
+panic_in_transition = [] # Test if evaluate_transition is called in CE pipeline
+must_fail_test = []      # Force constraint evaluation to fail for testing
 fri_only_must_fail = []  # FRI-only must-fail test
-wf_dbg = []  # Enable winterfell debug module for OOD frame debugging
+wf_dbg = []              # Enable winterfell debug module for OOD frame debugging
 
 [profile.release]
 opt-level = 3
