@@ -300,7 +300,7 @@ impl FRIProtocol {
         // Traverse up the tree using the proof siblings
         let mut current_position = position;
         for sibling_hash in proof {
-            let (left, right) = if current_position % 2 == 0 {
+            let (left, right) = if current_position.is_multiple_of(2) {
                 (current_hash, *sibling_hash)
             } else {
                 (*sibling_hash, current_hash)

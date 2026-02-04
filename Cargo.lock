@@ -184,19 +184,20 @@ dependencies = [
 
 [[package]]
 name = "bincode"
-version = "2.0.0-rc.3"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f11ea1a0346b94ef188834a65c068a03aec181c94896d481d7a0a40d85b0ce95"
+checksum = "36eaf5d7b090263e8150820482d5d93cd964a81e4019913c972f4edcc6edb740"
 dependencies = [
  "bincode_derive",
  "serde",
+ "unty",
 ]
 
 [[package]]
 name = "bincode_derive"
-version = "2.0.0-rc.3"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e30759b3b99a1b802a7a3aa21c85c3ded5c28e1c83170d82d70f08bbf7f3e4c"
+checksum = "bf95709a440f45e986983918d0e8a1f30a9b1df04918fc828670606804ac3c09"
 dependencies = [
  "virtue",
 ]
@@ -825,14 +826,14 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "grovedb"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "611077565b279965fa34897787ae52f79471f0476db785116cceb92077f237ad"
+version = "4.0.0"
+source = "git+https://github.com/dashpay/grovedb?rev=33dfd48a1718160cb333fa95424be491785f1897#33dfd48a1718160cb333fa95424be491785f1897"
 dependencies = [
- "bincode 2.0.0-rc.3",
+ "bincode 2.0.1",
  "bincode_derive",
  "blake3",
  "grovedb-costs",
+ "grovedb-element",
  "grovedb-merk",
  "grovedb-path",
  "grovedb-storage",
@@ -852,9 +853,8 @@ dependencies = [
 
 [[package]]
 name = "grovedb-costs"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ab159c3f82b0387f6a27a54930b18aa594b507013de947c8e909cf61abb75fe"
+version = "4.0.0"
+source = "git+https://github.com/dashpay/grovedb?rev=33dfd48a1718160cb333fa95424be491785f1897#33dfd48a1718160cb333fa95424be491785f1897"
 dependencies = [
  "integer-encoding",
  "intmap",
@@ -862,18 +862,33 @@ dependencies = [
 ]
 
 [[package]]
-name = "grovedb-merk"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4580e54da0031d2f36e50312f3361005099bceeb8adb0f6ccbf87a0880cd1b08"
+name = "grovedb-element"
+version = "4.0.0"
+source = "git+https://github.com/dashpay/grovedb?rev=33dfd48a1718160cb333fa95424be491785f1897#33dfd48a1718160cb333fa95424be491785f1897"
 dependencies = [
- "bincode 2.0.0-rc.3",
+ "bincode 2.0.1",
+ "bincode_derive",
+ "grovedb-path",
+ "grovedb-version",
+ "grovedb-visualize",
+ "hex",
+ "integer-encoding",
+ "thiserror 2.0.17",
+]
+
+[[package]]
+name = "grovedb-merk"
+version = "4.0.0"
+source = "git+https://github.com/dashpay/grovedb?rev=33dfd48a1718160cb333fa95424be491785f1897#33dfd48a1718160cb333fa95424be491785f1897"
+dependencies = [
+ "bincode 2.0.1",
  "bincode_derive",
  "blake3",
  "byteorder",
  "colored",
  "ed",
  "grovedb-costs",
+ "grovedb-element",
  "grovedb-path",
  "grovedb-storage",
  "grovedb-version",
@@ -888,18 +903,16 @@ dependencies = [
 
 [[package]]
 name = "grovedb-path"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d61e09bb3055358974ceb65b91752064979450092014d91a6bc4a52d77887ea"
+version = "4.0.0"
+source = "git+https://github.com/dashpay/grovedb?rev=33dfd48a1718160cb333fa95424be491785f1897#33dfd48a1718160cb333fa95424be491785f1897"
 dependencies = [
  "hex",
 ]
 
 [[package]]
 name = "grovedb-storage"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a33ff6be8e4e4a1e19383cd4af19df28b94b271c3138743570af9e1f0c8ec149"
+version = "4.0.0"
+source = "git+https://github.com/dashpay/grovedb?rev=33dfd48a1718160cb333fa95424be491785f1897#33dfd48a1718160cb333fa95424be491785f1897"
 dependencies = [
  "blake3",
  "grovedb-costs",
@@ -917,9 +930,8 @@ dependencies = [
 
 [[package]]
 name = "grovedb-version"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d61d27c76d49758b365a9e4a9da7f995f976b9525626bf645aef258024defd2"
+version = "4.0.0"
+source = "git+https://github.com/dashpay/grovedb?rev=33dfd48a1718160cb333fa95424be491785f1897#33dfd48a1718160cb333fa95424be491785f1897"
 dependencies = [
  "thiserror 2.0.17",
  "versioned-feature-core",
@@ -927,9 +939,8 @@ dependencies = [
 
 [[package]]
 name = "grovedb-visualize"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eaebfe3c1e5f263f14fd25ab060543b31eb4b9d6bdc44fe220e88df6be7ddf59"
+version = "4.0.0"
+source = "git+https://github.com/dashpay/grovedb?rev=33dfd48a1718160cb333fa95424be491785f1897#33dfd48a1718160cb333fa95424be491785f1897"
 dependencies = [
  "hex",
  "itertools 0.14.0",
@@ -943,7 +954,7 @@ dependencies = [
  "assert_matches",
  "base64",
  "bincode 1.3.3",
- "bincode 2.0.0-rc.3",
+ "bincode 2.0.1",
  "blake3",
  "bs58",
  "criterion",
@@ -1033,9 +1044,9 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hex-literal"
-version = "0.4.1"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
+checksum = "e712f64ec3850b98572bffac52e2c6f282b29fe6c5fa6d42334b30be438d95c1"
 
 [[package]]
 name = "http"
@@ -1276,15 +1287,15 @@ dependencies = [
 
 [[package]]
 name = "integer-encoding"
-version = "4.0.2"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d762194228a2f1c11063e46e32e5acb96e66e906382b9eb5441f2e0504bbd5a"
+checksum = "14c00403deb17c3221a1fe4fb571b9ed0370b3dcd116553c77fa294a3d918699"
 
 [[package]]
 name = "intmap"
-version = "3.1.2"
+version = "3.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16dd999647b7a027fadf2b3041a4ea9c8ae21562823fe5cbdecd46537d535ae2"
+checksum = "a2e611826a1868311677fdcdfbec9e8621d104c732d080f546a854530232f0ee"
 
 [[package]]
 name = "ipnet"
@@ -1435,9 +1446,8 @@ checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 
 [[package]]
 name = "librocksdb-sys"
-version = "0.17.3+10.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cef2a00ee60fe526157c9023edab23943fae1ce2ab6f4abb2a807c1746835de9"
+version = "0.18.0+10.7.5"
+source = "git+https://github.com/QuantumExplorer/rust-rocksdb.git?rev=52772eea7bcd214d1d07d80aa538b1d24e5015b7#52772eea7bcd214d1d07d80aa538b1d24e5015b7"
 dependencies = [
  "bindgen",
  "bzip2-sys",
@@ -1945,9 +1955,8 @@ dependencies = [
 
 [[package]]
 name = "rocksdb"
-version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26ec73b20525cb235bad420f911473b69f9fe27cc856c5461bccd7e4af037f43"
+version = "0.24.0"
+source = "git+https://github.com/QuantumExplorer/rust-rocksdb.git?rev=52772eea7bcd214d1d07d80aa538b1d24e5015b7#52772eea7bcd214d1d07d80aa538b1d24e5015b7"
 dependencies = [
  "libc",
  "librocksdb-sys",
@@ -2588,6 +2597,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
+name = "unty"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d49784317cd0d1ee7ec5c716dd598ec5b4483ea832a2dced265471cc0f690ae"
+
+[[package]]
 name = "url"
 version = "2.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2637,9 +2652,9 @@ checksum = "898c0ad500fdb1914df465a2c729fce33646ef65dfbbbd16a6d8050e0d2404df"
 
 [[package]]
 name = "virtue"
-version = "0.0.13"
+version = "0.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9dcc60c0624df774c82a0ef104151231d37da4962957d691c011c852b2473314"
+checksum = "051eb1abcf10076295e815102942cc58f9d5e3b4560e46e53c21e8ff6f3af7b1"
 
 [[package]]
 name = "walkdir"

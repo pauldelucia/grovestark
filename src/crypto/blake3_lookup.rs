@@ -84,7 +84,7 @@ impl RotationTable {
 
     /// Rotate a 32-bit value right by n bits using arithmetic
     pub fn rotate_right(&self, x: u32, n: u32) -> u32 {
-        (x >> n) | (x << (32 - n))
+        x.rotate_right(n)
     }
 
     /// Rotate a field element right by n bits
