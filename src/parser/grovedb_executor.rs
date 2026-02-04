@@ -169,8 +169,11 @@ pub fn extract_closest_identity_id_from_key_proof(proof_bytes: &[u8]) -> Result<
                     | MerkNode::KVValueHash(key, _, _)
                     | MerkNode::KVValueHashFeatureType(key, _, _, _)
                     | MerkNode::KVRefValueHash(key, _, _)
-                    | MerkNode::KVDigest(key, _) => candidates.push(key),
-                    MerkNode::Hash(_) | MerkNode::KVHash(_) => {}
+                    | MerkNode::KVDigest(key, _)
+                    | MerkNode::KVCount(key, _, _)
+                    | MerkNode::KVRefValueHashCount(key, _, _, _)
+                    | MerkNode::KVDigestCount(key, _, _) => candidates.push(key),
+                    MerkNode::Hash(_) | MerkNode::KVHash(_) | MerkNode::KVHashCount(_, _) => {}
                 }
             }
         }

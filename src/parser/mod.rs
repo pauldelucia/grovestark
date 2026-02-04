@@ -185,18 +185,19 @@ fn parse_grovedb_proof_with_root(
 
         fn compute_node_kv_hash(node: &MNode, cost: &mut OperationCost) -> [u8; 32] {
             match node {
-                MNode::KV(key, value) => {
+                MNode::KV(key, value) | MNode::KVCount(key, value, _) => {
                     kv_hash(key.as_slice(), value.as_slice()).unwrap_add_cost(cost)
                 }
-                MNode::KVHash(kv) => *kv,
-                MNode::KVDigest(key, value_hash) => {
+                MNode::KVHash(kv) | MNode::KVHashCount(kv, _) => *kv,
+                MNode::KVDigest(key, value_hash) | MNode::KVDigestCount(key, value_hash, _) => {
                     kv_digest_to_kv_hash(key.as_slice(), value_hash).unwrap_add_cost(cost)
                 }
                 MNode::KVValueHash(key, _value, value_hash)
                 | MNode::KVValueHashFeatureType(key, _value, value_hash, _) => {
                     kv_digest_to_kv_hash(key.as_slice(), value_hash).unwrap_add_cost(cost)
                 }
-                MNode::KVRefValueHash(key, referenced_value, node_value_hash) => {
+                MNode::KVRefValueHash(key, referenced_value, node_value_hash)
+                | MNode::KVRefValueHashCount(key, referenced_value, node_value_hash, _) => {
                     let referenced_value_hash =
                         value_hash(referenced_value.as_slice()).unwrap_add_cost(cost);
                     let combined =
