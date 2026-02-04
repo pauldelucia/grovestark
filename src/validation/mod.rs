@@ -92,27 +92,33 @@ pub fn validate_config(config: &STARKConfig) -> Result<()> {
         ));
     }
 
-    const MIN_EXPANSION_FACTOR: usize = 16;
-    const MIN_NUM_QUERIES: usize = 48;
-    const MIN_FOLDING_FACTOR: usize = 4;
+    // Allow weak params for testing via env var or feature flag
+    let allow_weak = cfg!(any(test, feature = "weak-params"))
+        || std::env::var("GS_ALLOW_WEAK_PARAMS").unwrap_or_default() == "1";
 
-    if config.expansion_factor < MIN_EXPANSION_FACTOR {
-        return Err(Error::InvalidInput(format!(
-            "Expansion factor too low for production: {} < {}",
-            config.expansion_factor, MIN_EXPANSION_FACTOR
-        )));
-    }
-    if config.num_queries < MIN_NUM_QUERIES {
-        return Err(Error::InvalidInput(format!(
-            "Number of queries too low for production: {} < {}",
-            config.num_queries, MIN_NUM_QUERIES
-        )));
-    }
-    if config.folding_factor < MIN_FOLDING_FACTOR {
-        return Err(Error::InvalidInput(format!(
-            "Folding factor too low for production: {} < {}",
-            config.folding_factor, MIN_FOLDING_FACTOR
-        )));
+    if !allow_weak {
+        const MIN_EXPANSION_FACTOR: usize = 16;
+        const MIN_NUM_QUERIES: usize = 48;
+        const MIN_FOLDING_FACTOR: usize = 4;
+
+        if config.expansion_factor < MIN_EXPANSION_FACTOR {
+            return Err(Error::InvalidInput(format!(
+                "Expansion factor too low for production: {} < {}",
+                config.expansion_factor, MIN_EXPANSION_FACTOR
+            )));
+        }
+        if config.num_queries < MIN_NUM_QUERIES {
+            return Err(Error::InvalidInput(format!(
+                "Number of queries too low for production: {} < {}",
+                config.num_queries, MIN_NUM_QUERIES
+            )));
+        }
+        if config.folding_factor < MIN_FOLDING_FACTOR {
+            return Err(Error::InvalidInput(format!(
+                "Folding factor too low for production: {} < {}",
+                config.folding_factor, MIN_FOLDING_FACTOR
+            )));
+        }
     }
 
     Ok(())

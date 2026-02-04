@@ -17,7 +17,6 @@ use std::time::{Duration, Instant};
 fn test_config() -> STARKConfig {
     // Allow weaker parameters for test speed
     std::env::set_var("GS_ALLOW_WEAK_PARAMS", "1");
-    std::env::set_var("FAST_TESTS", "1");
     STARKConfig {
         field_bits: 64,
         expansion_factor: 8,

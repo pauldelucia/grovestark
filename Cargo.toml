@@ -76,6 +76,7 @@ hex = "0.4"
 [features]
 default = []
 bench = ["criterion"]
+weak-params = []  # Allow weaker security params (alternative to GS_ALLOW_WEAK_PARAMS=1 env var)
 tripwire = []
 tripwire_perf = []
 validate_trace = []  # Enable trace validation (slow, use only for debugging)
