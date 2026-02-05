@@ -64,26 +64,19 @@ fn zero_limbs() -> [u16; 16] {
 }
 
 fn write_identity_row(trace: &mut [Vec<BaseElement>], row: usize) {
+    // X = 0
     write_limbs_u16(trace, &X_COLS, row, &zero_limbs());
-
-    // Write Y = 1, but skip Y[2] (column 54) which conflicts with SEL_FINAL
-    let y_limbs = one_limbs();
-    for i in 0..16 {
-        if i != 2 {
-            // Skip Y[2] to avoid SEL_FINAL conflict
-            trace[Y_COLS[i]][row] = BaseElement::new(y_limbs[i] as u64);
-        }
-    }
-
+    // Y = 1
+    write_limbs_u16(trace, &Y_COLS, row, &one_limbs());
+    // Z = 1
     write_limbs_u16(trace, &Z_COLS, row, &one_limbs());
-
-    // Write T = 0, but skip T[5] (column 53) which is SEL_FINAL
-    let t_limbs = zero_limbs();
+    // T = 0, but skip T_COLS[5] (column 53 = SEL_FINAL) to avoid overwriting it
+    let t_zero = zero_limbs();
     for i in 0..16 {
-        if i != 5 {
-            // Skip T[5] to avoid overwriting SEL_FINAL
-            trace[T_COLS[i]][row] = BaseElement::new(t_limbs[i] as u64);
+        if i == 5 {
+            continue; // T_COLS[5] == SEL_FINAL, must not overwrite
         }
+        trace[T_COLS[i]][row] = BaseElement::new(t_zero[i] as u64);
     }
 }
 
@@ -306,61 +299,34 @@ pub fn fill_eddsa_phase_with_aux(
         current_row += 1;
     }
 
-    // Check if the result is projective identity and write explicit identity
+    // Check if the result is projective identity
     let final_point = cofactor_result;
 
-    #[cfg(debug_assertions)]
-    {
-        println!(
-            "🔍 Identity check at row {}: is_identity = {}",
-            EDDSA_END,
-            is_identity_projective(&final_point)
-        );
-        println!(
-            "  final_point: x[0]={}, y[0]={}, z[0]={}, t[0]={}",
-            final_point.x[0], final_point.y[0], final_point.z[0], final_point.t[0]
-        );
-    }
+    // Normalized identity for aux trace boundary assertions: (X=0, Y=1, Z=1, T=0)
+    let identity_normalized = ExtendedPoint {
+        x: [0u64; 16],
+        y: {
+            let mut y = [0u64; 16];
+            y[0] = 1;
+            y
+        },
+        z: {
+            let mut z = [0u64; 16];
+            z[0] = 1;
+            z
+        },
+        t: [0u64; 16],
+    };
 
     if is_identity_projective(&final_point) {
-        // Explicitly write identity (0:1:1:0) at EDDSA_END
-        #[cfg(debug_assertions)]
-        println!("✅ Writing identity to row {}", EDDSA_END);
-        write_identity_row(trace, EDDSA_END);
-
-        // Verify what was actually written
-        #[cfg(debug_assertions)]
-        {
-            println!("  Verification after write:");
-            println!(
-                "    trace[X_COLS[0]][{}] = {}",
-                EDDSA_END,
-                trace[X_COLS[0]][EDDSA_END].as_int()
-            );
-            println!(
-                "    trace[Y_COLS[0]][{}] = {}",
-                EDDSA_END,
-                trace[Y_COLS[0]][EDDSA_END].as_int()
-            );
-            println!(
-                "    trace[Z_COLS[0]][{}] = {}",
-                EDDSA_END,
-                trace[Z_COLS[0]][EDDSA_END].as_int()
-            );
-            println!(
-                "    trace[T_COLS[0]][{}] = {}",
-                EDDSA_END,
-                trace[T_COLS[0]][EDDSA_END].as_int()
-            );
-        }
-
-        aux_storage.store_point(&final_point);
+        // Store the NORMALIZED identity so aux boundary assertions (X=0, Y[0]=1, Z[0]=1, T=0) pass
+        // Note: write_identity_row was removed because it wrote to main trace using aux column
+        // indices, corrupting main columns (e.g., Z_COLS[0]=32 = WINDOW_BITS_COL).
+        aux_storage.store_point(&identity_normalized);
     } else {
         // Signature verification failed - return error (unless skip_eddsa is enabled)
         #[cfg(not(feature = "skip_eddsa"))]
         {
-            #[cfg(debug_assertions)]
-            println!("❌ EdDSA verification failed - not identity!");
             return Err(crate::error::Error::InvalidSignature(
                 "EdDSA signature verification failed: result is not identity".to_string(),
             ));
@@ -368,42 +334,18 @@ pub fn fill_eddsa_phase_with_aux(
 
         #[cfg(feature = "skip_eddsa")]
         {
-            eprintln!("⚠️ SKIP_EDDSA: Bypassing EdDSA verification failure for FRI testing");
-            // Store a dummy identity point to continue
-            aux_storage.store_point(&ExtendedPoint {
-                x: [0; 16],
-                y: [1; 16],
-                z: [1; 16],
-                t: [0; 16],
-            });
+            eprintln!("SKIP_EDDSA: Bypassing EdDSA verification failure for FRI testing");
+            aux_storage.store_point(&identity_normalized);
         }
     }
 
-    // Fill remaining rows with final values
-    #[cfg(debug_assertions)]
-    println!(
-        "📝 Filling rows {} to {} (exclusive) with values from row {}",
-        current_row,
-        EDDSA_END,
-        current_row - 1
-    );
+    // Fill remaining rows with final values (padding)
     for row in current_row..EDDSA_END {
         for col in 0..trace.len() {
             trace[col][row] = trace[col][current_row - 1];
         }
-        // Store the same final point for all remaining rows
-        aux_storage.store_point(&final_point);
-    }
-
-    // Verify the identity wasn't overwritten
-    #[cfg(debug_assertions)]
-    {
-        println!("🔍 Final verification of row {}:", EDDSA_END);
-        println!(
-            "    trace[Z_COLS[0]][{}] = {} (should be 1)",
-            EDDSA_END,
-            trace[Z_COLS[0]][EDDSA_END].as_int()
-        );
+        // Store normalized identity for all remaining rows
+        aux_storage.store_point(&identity_normalized);
     }
 
     Ok(aux_storage)
