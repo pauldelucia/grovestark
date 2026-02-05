@@ -18,10 +18,13 @@ const JOIN_OWNER_IDENTITY: u64 = 0x30;
 const JOIN_KEYS_ROOT: u64 = 0x31;
 const JOIN_PUBKEY: u64 = 0x32;
 
-/// Number of rows per BLAKE3 hash in Merkle phase
-/// Each Merkle node verification requires a full BLAKE3 compression
-/// For simplified implementation, we're using 448 rows per hash
-const MERKLE_HASH_ROWS: usize = 448; // 7 rounds * 8 steps * 8 nibbles
+/// Number of rows per Merkle hash level advancement.
+/// NOTE: This does NOT equal a full BLAKE3 compression (3584 rows).
+/// The Merkle phase reuses the BLAKE3 compression function which writes 3584 rows,
+/// but only advances by 448 rows between levels. The BLAKE3 writes overlap into
+/// subsequent level slots, which is acceptable because each level re-initializes its
+/// portion. A proper fix would require trace length expansion (tracked as future work).
+const MERKLE_HASH_ROWS: usize = 448;
 
 /// Maximum number of Merkle path levels
 const MAX_PATH_DEPTH: usize = 32;
@@ -42,22 +45,6 @@ pub fn fill_merkle_phase(
     witness: &PrivateInputs,
     public_inputs: &PublicInputs,
 ) -> Result<(), Error> {
-    crate::hotlog!("[fill_merkle_phase] Starting at row {}", start_row);
-    crate::hotlog!("  V8 value at start: {:?}", trace[V8][start_row]);
-    crate::hotlog!(
-        "  Path 1 length: {}",
-        witness.owner_id_leaf_to_doc_path.len()
-    );
-    crate::hotlog!("  Path 2 length: {}", witness.docroot_to_state_path.len());
-    crate::hotlog!(
-        "  Path 3 length: {}",
-        witness.identity_leaf_to_state_path.len()
-    );
-    crate::hotlog!(
-        "  Path 4 length: {}",
-        witness.key_leaf_to_keysroot_path.len()
-    );
-
     // Leave the first Merkle row (start_row) untouched to preserve the
     // last BLAKE3 commit's next-row writes used by C6. Begin Merkle
     // operations at start_row + 1.
@@ -140,15 +127,11 @@ pub fn fill_merkle_phase(
     {
         let final_row = row - 1;
         let expected_root = bytes_to_u32_array(&public_inputs.state_root);
-        eprintln!(
-            "[MERKLE] Forcing final row {} to public state root: {:02x?}",
-            final_row, expected_root
-        );
         store_final_root(trace, final_row, &expected_root)?;
     }
 
     // Fill remaining rows with padding
-    let end_row = start_row + 16384; // Merkle phase allocation
+    let end_row = start_row + crate::stark_winterfell::MERKLE_LEN;
     const IS_LEFT_COL: usize = 63;
     while row < end_row {
         for col in 0..trace.len() {
@@ -179,27 +162,13 @@ fn process_merkle_path(
 ) -> Result<[u32; 8], Error> {
     let mut current_hash = *initial_hash;
 
-    eprintln!("[MERKLE PATH DEBUG] Processing {} nodes", path.len());
-    eprintln!("[MERKLE PATH DEBUG] Starting hash: {:08x?}", initial_hash);
-
     for (level, node) in path.iter().enumerate() {
         if level >= MAX_PATH_DEPTH {
             return Err(Error::InvalidInput("Merkle path too deep".into()));
         }
 
         load_merkle_node(trace, *row, &current_hash, node)?;
-        let prev_hash = current_hash;
         let parent_hash = compute_merkle_parent(&current_hash, node, trace, *row)?;
-        if level < 3 {
-            eprintln!(
-                "[MERKLE PATH DEBUG] Level {}: is_left={}, sibling={:02x?}",
-                level,
-                node.is_left,
-                &node.hash[0..8]
-            );
-            eprintln!("  prev_hash: {:08x?}", prev_hash);
-            eprintln!("  new_hash:  {:08x?}", parent_hash);
-        }
         current_hash = parent_hash;
         *row += MERKLE_HASH_ROWS;
         if *row >= trace[0].len() {
@@ -209,10 +178,6 @@ fn process_merkle_path(
 
     if is_public_root {
         let final_root_row = *row - 1;
-        eprintln!(
-            "[MERKLE] Final computed root at row {}: {:02x?}",
-            final_root_row, current_hash
-        );
         store_final_root(trace, final_root_row, &current_hash)?;
     }
 

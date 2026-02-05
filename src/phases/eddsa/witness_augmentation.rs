@@ -33,10 +33,6 @@ pub fn augment_eddsa_witness(base: &PrivateInputs) -> Result<PrivateInputs> {
     augmented.h_range_diff = limbs_to_bytes_u16(&h_diff);
     augmented.h_range_borrow = limbs_to_bytes_u16(&h_borrow);
 
-    // Debug: Check if range check data is non-zero
-    eprintln!("[AUGMENT] s_borrow[0..4] = {:?}", &s_borrow[0..4]);
-    eprintln!("[AUGMENT] s_diff[0..4] = {:?}", &s_diff[0..4]);
-
     // 3. Decompress R and A points from compressed form
     use crate::crypto::point_decompression::decompress_ed25519_point;
 

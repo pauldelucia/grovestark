@@ -1,11 +1,28 @@
 //! GroveVM constraints implementation
 //!
-//! Implements packed constraints using deterministic gamma for lane packing
+//! Implements packed constraints using deterministic gamma for lane packing.
+//! All stack index selection uses algebraic Lagrange indicators (sp_eq)
+//! instead of non-algebraic decode_small_value.
 
 use winterfell::math::fields::f64::BaseElement;
 use winterfell::math::FieldElement;
 
 use crate::phases::grovevm::types::*;
+
+/// Algebraic Lagrange indicator: returns 1 when `v == c`, 0 when `v ∈ {0..D_MAX}\{c}`.
+/// Degree = D_MAX (= 5).
+fn sp_eq<E: FieldElement<BaseField = BaseElement>>(v: E, c: usize) -> E {
+    let mut num = E::ONE;
+    for k in 0..=D_MAX {
+        if k != c {
+            let diff = E::from(BaseElement::new(c as u64)) - E::from(BaseElement::new(k as u64));
+            num = num * (v - E::from(BaseElement::new(k as u64)));
+            let inv = diff.inv();
+            num = num * inv;
+        }
+    }
+    num
+}
 
 /// GroveVM constraints evaluator
 pub struct GroveVMConstraints {
@@ -24,7 +41,7 @@ impl GroveVMConstraints {
     }
 
     /// Evaluate all GroveVM constraints
-    /// Returns a vector of constraint evaluations
+    /// Returns a vector of 12 constraint evaluations
     pub fn evaluate<E: FieldElement<BaseField = BaseElement>>(
         &self,
         current: &[E],
@@ -33,11 +50,9 @@ impl GroveVMConstraints {
     ) -> Vec<E> {
         let mut result = Vec::new();
 
-        // Convert gamma to extension field if needed
-        // Use BaseElement conversion through ToElements trait
         let gamma = E::from(self.gamma);
 
-        // 1. Opcode one-hot constraints (4 constraints total)
+        // 1. Opcode one-hot constraints (5 constraints: 4 booleanity + 1 at-most-one)
         self.enforce_opcode_one_hot(current, &mut result);
 
         // 2. Stack pointer update (2 constraints)
@@ -53,7 +68,6 @@ impl GroveVMConstraints {
         if let Some(blake3_out) = blake3_output {
             self.enforce_stack_writes_packed(current, next, blake3_out, gamma, &mut result);
         } else {
-            // When BLAKE3 output is not available, add zero constraints to maintain count
             result.push(E::ZERO);
             result.push(E::ZERO);
         }
@@ -61,22 +75,6 @@ impl GroveVMConstraints {
         // 6. Safety constraints (packed into one):
         //    - No push beyond depth: if sp == D_MAX then is_push must be 0
         //    - No merge below depth: if sp == 0 then is_merge must be 0
-        //    We build exact-match indicators eq(sp, c) over small domain 0..D_MAX
-        let sp_eq = |v: E, c: usize| -> E {
-            let mut num = E::ONE;
-            for k in 0..=D_MAX {
-                if k != c {
-                    let diff =
-                        E::from(BaseElement::new(c as u64)) - E::from(BaseElement::new(k as u64));
-                    // Multiply numerator by (v - k)
-                    num = num * (v - E::from(BaseElement::new(k as u64)));
-                    // Scale by inverse of (c - k)
-                    let inv = diff.inv();
-                    num = num * inv;
-                }
-            }
-            num
-        };
         let sp_eq_max = sp_eq(current[SP], D_MAX);
         let sp_eq_zero = sp_eq(current[SP], 0);
         let is_push = current[OP_PUSH_H] + current[OP_PUSH_KV];
@@ -86,7 +84,7 @@ impl GroveVMConstraints {
         result
     }
 
-    /// Enforce opcode encoding (4 constraints: all must be binary)
+    /// Enforce opcode encoding (5 constraints: 4 binary + 1 at-most-one)
     fn enforce_opcode_one_hot<E: FieldElement<BaseField = BaseElement>>(
         &self,
         current: &[E],
@@ -98,13 +96,14 @@ impl GroveVMConstraints {
         let op_ch = current[OP_CHILD];
 
         // Boolean constraints for all 4 opcodes (ensures each is 0 or 1)
-        result.push(op_ph * (op_ph - E::ONE)); // op_ph * (op_ph - 1) = 0
-        result.push(op_pk * (op_pk - E::ONE)); // op_pk * (op_pk - 1) = 0
-        result.push(op_pr * (op_pr - E::ONE)); // op_pr * (op_pr - 1) = 0
-        result.push(op_ch * (op_ch - E::ONE)); // op_ch * (op_ch - 1) = 0
+        result.push(op_ph * (op_ph - E::ONE));
+        result.push(op_pk * (op_pk - E::ONE));
+        result.push(op_pr * (op_pr - E::ONE));
+        result.push(op_ch * (op_ch - E::ONE));
 
-        // Note: We allow all zeros (no-op in padding) OR exactly one 1 (active operation)
-        // The at-most-one constraint is implicitly enforced by the trace construction
+        // At-most-one constraint: sum ∈ {0, 1}
+        let sum = op_ph + op_pk + op_pr + op_ch;
+        result.push(sum * (sum - E::ONE));
     }
 
     /// Enforce stack pointer update (2 constraints)
@@ -146,11 +145,13 @@ impl GroveVMConstraints {
         let tp_curr = current[TP];
         let tp_next = next[TP];
 
-        // TP increments only on push operations
         result.push(tp_next - tp_curr - (op_ph + op_pk));
     }
 
-    /// Enforce stack continuity using packed constraint (1 constraint)
+    /// Enforce stack continuity using algebraic packed constraint (1 constraint)
+    ///
+    /// For each slot, compute `is_written = is_push * sp_eq(sp, slot) + is_merge * sp_eq(sp, slot+2)`,
+    /// then pack `(1 - is_written) * (next[idx] - current[idx])` with gamma.
     fn enforce_stack_continuity_packed<E: FieldElement<BaseField = BaseElement>>(
         &self,
         current: &[E],
@@ -158,34 +159,35 @@ impl GroveVMConstraints {
         gamma: E,
         result: &mut Vec<E>,
     ) {
-        // Extract SP value using small value decoder
-        let sp = self.decode_small_value(current[SP]);
+        let sp_val = current[SP];
         let is_push = current[OP_PUSH_H] + current[OP_PUSH_KV];
         let is_merge = current[OP_PARENT] + current[OP_CHILD];
 
-        // Pack all non-written slots into single constraint
         let mut packed_diff = E::ZERO;
         let mut gamma_power = E::ONE;
 
         for slot in 0..D_MAX {
-            // Determine if this slot is being written
-            let is_written = if sp < D_MAX {
-                // Push writes to slot[sp], merge writes to slot[sp-2]
-                let is_push_slot = (slot == sp) && is_push != E::ZERO;
-                let is_merge_slot = sp >= 2 && (slot == sp - 2) && is_merge != E::ZERO;
-                is_push_slot || is_merge_slot
+            // Algebraically determine if this slot is being written:
+            // Push writes to slot[sp], so is_written_by_push = is_push * sp_eq(sp, slot)
+            let is_push_target = is_push * sp_eq(sp_val, slot);
+
+            // Merge writes to slot[sp-2], so is_written_by_merge = is_merge * sp_eq(sp, slot+2)
+            // sp_eq(sp, slot+2) is well-defined for slot+2 <= D_MAX
+            let is_merge_target = if slot + 2 <= D_MAX {
+                is_merge * sp_eq(sp_val, slot + 2)
             } else {
-                false
+                E::ZERO
             };
 
-            if !is_written {
-                // Pack the continuity check for this slot
-                for limb in 0..LIMBS_PER_HASH {
-                    let idx = STACK_START + slot * LIMBS_PER_HASH + limb;
-                    if idx < current.len() && idx < next.len() {
-                        packed_diff = packed_diff + gamma_power * (next[idx] - current[idx]);
-                        gamma_power = gamma_power * gamma;
-                    }
+            let is_written = is_push_target + is_merge_target;
+
+            // Pack the continuity check: (1 - is_written) * (next - current) for each limb
+            for limb in 0..LIMBS_PER_HASH {
+                let idx = STACK_START + slot * LIMBS_PER_HASH + limb;
+                if idx < current.len() && idx < next.len() {
+                    packed_diff = packed_diff
+                        + gamma_power * (E::ONE - is_written) * (next[idx] - current[idx]);
+                    gamma_power = gamma_power * gamma;
                 }
             }
         }
@@ -193,10 +195,7 @@ impl GroveVMConstraints {
         result.push(packed_diff);
     }
 
-    /// Enforce stack write operations (2 packed constraints)
-    /// SIMPLIFIED TO AVOID DEGREE-3: We remove the gating entirely
-    /// The continuity constraint already ensures non-written slots remain unchanged
-    /// These constraints just verify the written values are correct
+    /// Enforce stack write operations using algebraic selection (2 packed constraints)
     fn enforce_stack_writes_packed<E: FieldElement<BaseField = BaseElement>>(
         &self,
         current: &[E],
@@ -205,89 +204,78 @@ impl GroveVMConstraints {
         gamma: E,
         result: &mut Vec<E>,
     ) {
-        // Gating flags
+        let sp_val = current[SP];
         let is_push = current[OP_PUSH_H] + current[OP_PUSH_KV];
         let is_merge = current[OP_PARENT] + current[OP_CHILD];
 
         // (A) Push write: write PUSH_HASH limbs into stack[sp]
+        // Use algebraic selection: sum over all possible slots, gated by sp_eq
         let mut push_packed = E::ZERO;
-        let sp = self.decode_small_value(current[SP]);
-        if sp < D_MAX {
-            let base = STACK_START + sp * LIMBS_PER_HASH;
-            let mut gp = E::ONE;
-            for limb in 0..LIMBS_PER_HASH {
-                let idx = base + limb;
-                if idx < next.len() && PUSH_HASH_START + limb < current.len() {
-                    push_packed = push_packed + gp * (next[idx] - current[PUSH_HASH_START + limb]);
-                    gp = gp * gamma;
+        let mut gp = E::ONE;
+        for limb in 0..LIMBS_PER_HASH {
+            // For each limb, compute the algebraically selected next value
+            let mut selected_next = E::ZERO;
+            for slot in 0..D_MAX {
+                let idx = STACK_START + slot * LIMBS_PER_HASH + limb;
+                if idx < next.len() {
+                    selected_next += sp_eq(sp_val, slot) * next[idx];
                 }
             }
+            if PUSH_HASH_START + limb < current.len() {
+                push_packed += gp * (selected_next - current[PUSH_HASH_START + limb]);
+            }
+            gp = gp * gamma;
         }
         result.push(is_push * push_packed);
 
         // (B) Merge write: write BLAKE3(left,right) into stack[sp-2]
+        // Use algebraic selection: sum over all possible slots, gated by sp_eq(sp, slot+2)
         let mut merge_packed = E::ZERO;
-        if sp >= 2 {
-            let base = STACK_START + (sp - 2) * LIMBS_PER_HASH;
-            let mut gp = E::ONE;
-            for limb in 0..LIMBS_PER_HASH {
-                let idx = base + limb;
-                if idx < next.len() {
-                    merge_packed = merge_packed + gp * (next[idx] - blake3_output[limb]);
-                    gp = gp * gamma;
+        let mut gp = E::ONE;
+        for limb in 0..LIMBS_PER_HASH {
+            let mut selected_next = E::ZERO;
+            for slot in 0..D_MAX {
+                if slot + 2 <= D_MAX {
+                    let idx = STACK_START + slot * LIMBS_PER_HASH + limb;
+                    if idx < next.len() {
+                        selected_next += sp_eq(sp_val, slot + 2) * next[idx];
+                    }
                 }
             }
+            merge_packed += gp * (selected_next - blake3_output[limb]);
+            gp = gp * gamma;
         }
         result.push(is_merge * merge_packed);
     }
-
-    /// Decode small field element value to usize
-    /// Works for values 0..16 which covers our stack pointer range
-    fn decode_small_value<E: FieldElement<BaseField = BaseElement>>(&self, value: E) -> usize {
-        // Since we know SP is small (0..D_MAX where D_MAX=5),
-        // we can check against known values
-        for i in 0..16 {
-            let test = E::from(BaseElement::new(i));
-            if value == test {
-                return i as usize;
-            }
-        }
-        // Default to 0 if not found (shouldn't happen with valid traces)
-        0
-    }
 }
 
-/// Static version of decode_small_value for non-method contexts
-fn decode_small_value_static<E: FieldElement<BaseField = BaseElement>>(value: E) -> usize {
-    for i in 0..16 {
-        let test = E::from(BaseElement::new(i));
-        if value == test {
-            return i as usize;
-        }
-    }
-    0
-}
-
-/// Route stack operations to BLAKE3 for Parent/Child operations
+/// Route stack operations to BLAKE3 for Parent/Child operations.
+/// Note: route_to_blake3 is used at trace generation time (not constraint evaluation)
+/// so non-algebraic decode is acceptable here.
 pub fn route_to_blake3<E: FieldElement<BaseField = BaseElement>>(
     current: &[E],
     main_trace: &mut [E],
-    msg_start: usize, // Starting column for message input
+    msg_start: usize,
 ) {
-    // Extract SP value using small value decoder
-    let sp = decode_small_value_static(current[SP]);
+    // Extract SP value (trace-time only, non-algebraic is fine)
+    let sp = {
+        let mut found = 0usize;
+        for i in 0..16 {
+            if current[SP] == E::from(BaseElement::new(i as u64)) {
+                found = i;
+                break;
+            }
+        }
+        found
+    };
     let is_parent = current[OP_PARENT];
     let is_child = current[OP_CHILD];
     let is_merge = is_parent + is_child;
 
     if is_merge != E::ZERO && sp >= 2 {
-        // Read top two stack items
         let left_idx = STACK_START + (sp - 2) * LIMBS_PER_HASH;
         let right_idx = STACK_START + (sp - 1) * LIMBS_PER_HASH;
 
-        // Route to MSG lanes based on orientation
-        // Parent: (S[sp-2], S[sp-1])
-        // Child: (S[sp-1], S[sp-2]) - swapped
         let swap = is_child;
 
         for i in 0..8 {
@@ -295,7 +283,6 @@ pub fn route_to_blake3<E: FieldElement<BaseField = BaseElement>>(
                 let left = current[left_idx + i];
                 let right = current[right_idx + i];
 
-                // Route to BLAKE3 message lanes
                 if msg_start + i < main_trace.len() && msg_start + 8 + i < main_trace.len() {
                     main_trace[msg_start + i] = left * (E::ONE - swap) + right * swap;
                     main_trace[msg_start + 8 + i] = right * (E::ONE - swap) + left * swap;
@@ -322,13 +309,14 @@ mod tests {
         let mut result = Vec::new();
         constraints.enforce_opcode_one_hot(&current, &mut result);
 
-        // First three should be 0 (boolean constraints satisfied)
+        // First four should be 0 (boolean constraints satisfied)
         assert_eq!(result[0], BaseElement::ZERO); // 1 * (1 - 1) = 0
         assert_eq!(result[1], BaseElement::ZERO); // 0 * (0 - 1) = 0
         assert_eq!(result[2], BaseElement::ZERO); // 0 * (0 - 1) = 0
+        assert_eq!(result[3], BaseElement::ZERO); // 0 * (0 - 1) = 0
 
-        // Sum should be 0 (since 1 + 0 + 0 + 0 - 1 = 0)
-        assert_eq!(result[3], BaseElement::ZERO);
+        // At-most-one: sum=1, 1*(1-1)=0
+        assert_eq!(result[4], BaseElement::ZERO);
     }
 
     #[test]

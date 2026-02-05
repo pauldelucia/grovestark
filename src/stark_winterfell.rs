@@ -13,11 +13,8 @@ use winterfell::{
     TransitionConstraintDegree,
 };
 
-// use crate::winterfell_ext::LdeGuard;
-
 use crate::error::{Error, Result};
 use crate::types::{PrivateInputs, PublicInputs, STARKConfig};
-extern crate alloc;
 
 // Hotlog macro for debugging
 #[cfg(feature = "hotlog")]
@@ -49,22 +46,24 @@ const AUX_TRACE_WIDTH: usize = 119;
 struct ConstraintLayout {
     blake3: std::ops::Range<usize>,
     merkle: std::ops::Range<usize>,
-    eddsa: std::ops::Range<usize>, // EdDSA selector constraint
+    identity: std::ops::Range<usize>, // Identity binding constraint
+    eddsa: std::ops::Range<usize>,    // EdDSA selector constraint
 }
 
 const LAYOUT: ConstraintLayout = ConstraintLayout {
-    blake3: 0..15,  // 15 BLAKE3 constraints (split commit)
-    merkle: 15..21, // 6 Merkle constraints (2 flags + 4 packed lanes)
-    eddsa: 21..22,  // 1 SEL_FINAL constraint
+    blake3: 0..15,    // 15 BLAKE3 constraints (split commit)
+    merkle: 15..21,   // 6 Merkle constraints (2 flags + 4 packed lanes)
+    identity: 21..22, // 1 identity binding constraint (DIFF = OWNER - IDENTITY)
+    eddsa: 22..23,    // 1 SEL_FINAL constraint
 };
 
-/// Number of main transition constraints (EdDSA constraints moved to auxiliary)
-const NUM_CONSTRAINTS: usize = 22; // 15 BLAKE3 + 6 Merkle + 1 SEL_FINAL
+/// Number of main transition constraints
+const NUM_CONSTRAINTS: usize = 23; // 15 BLAKE3 + 6 Merkle + 1 identity + 1 SEL_FINAL
 
 /// Number of auxiliary transition constraints (EdDSA + GroveVM)
-/// GroveVM: 11 constraints (4 opcode + 2 SP + 1 TP + 1 continuity + 2 writes + 1 finality)
-/// EdDSA: 0 for now (coordinate relations handled differently)
-const NUM_AUX_CONSTRAINTS: usize = 11; // GroveVM constraints
+/// GroveVM: 12 constraints (4 opcode booleanity + 1 at-most-one + 2 SP + 1 TP + 1 continuity + 2 writes + 1 finality)
+/// EdDSA: 1 (window bit constraint)
+const NUM_AUX_CONSTRAINTS: usize = 13; // 12 GroveVM + 1 EdDSA
 
 // Phase boundaries
 pub const BLAKE3_LEN: usize = 3584;
@@ -421,12 +420,6 @@ impl GroveAir {
         hasher.update(&(options.grinding_factor() as u64).to_le_bytes());
         hasher.update(&(options.num_queries() as u64).to_le_bytes());
 
-        eprintln!("[LANE-PACK-CALC] Inputs to gamma calculation:");
-        eprintln!("  trace_len: {}", trace_len);
-        eprintln!("  blowup_factor: {}", options.blowup_factor());
-        eprintln!("  grinding_factor: {}", options.grinding_factor());
-        eprintln!("  num_queries: {}", options.num_queries());
-
         // Hash to get deterministic bytes
         let hash = hasher.finalize();
         let bytes = hash.as_bytes();
@@ -442,45 +435,9 @@ impl GroveAir {
             gamma = gamma + BaseElement::ONE + BaseElement::ONE; // Make it 2
         }
 
-        eprintln!("[LANE-PACK] Deterministic gamma = {:?}", gamma);
         gamma
     }
 
-    /// CE-parity probe for debugging
-    #[allow(dead_code)]
-    fn ce_parity_probe<E: FieldElement>(&self, _where: &str, _vec: &[E]) {
-        // Only active with wf_dbg feature
-        #[cfg(feature = "wf_dbg")]
-        {
-            let mut acc: u128 = 0;
-            let mut mul: u128 = 1;
-            for (i, v) in _vec.iter().enumerate() {
-                // Compose a u128 limb from the first 16 bytes for parity hashing
-                let bytes = v.as_bytes();
-                let mut limb: u128 = 0;
-                let take = core::cmp::min(16, bytes.len());
-                for (j, b) in bytes.iter().take(take).enumerate() {
-                    limb |= (*b as u128) << (8 * j);
-                }
-                acc = acc.wrapping_add((i as u128 + 1) * limb.wrapping_add(mul));
-                mul = mul.wrapping_mul(0x1_0000_01B3); // cheap rolling mix
-            }
-            eprintln!("[CE-PROBE] len={} acc={:#032x}", _vec.len(), acc);
-        }
-
-        // Without wf_dbg, throttle logs heavily to avoid spam during CE loops
-        #[cfg(not(feature = "wf_dbg"))]
-        {
-            use core::sync::atomic::{AtomicUsize, Ordering};
-            static PRINTS: AtomicUsize = AtomicUsize::new(0);
-            let n = PRINTS.fetch_add(1, Ordering::Relaxed);
-            if n < 3 {
-                eprintln!("[CE-PROBE-LITE] len={}", _vec.len());
-            } else if n == 3 {
-                eprintln!("[CE-PROBE-LITE] further logs suppressed");
-            }
-        }
-    }
 }
 
 impl Air for GroveAir {
@@ -531,6 +488,10 @@ impl Air for GroveAir {
         for _ in LAYOUT.merkle.clone() {
             main_degrees.push(TransitionConstraintDegree::with_cycles(2, vec![2, 2]));
         }
+        // Identity binding constraint: gated by Merkle phase periodic
+        for _ in LAYOUT.identity.clone() {
+            main_degrees.push(TransitionConstraintDegree::with_cycles(2, vec![2]));
+        }
         // EdDSA selector constraint: gated by at most one periodic
         for _ in LAYOUT.eddsa.clone() {
             main_degrees.push(TransitionConstraintDegree::with_cycles(2, vec![2]));
@@ -548,17 +509,8 @@ impl Air for GroveAir {
         // Calculate deterministic gamma for lane packing
         let gamma = Self::calculate_lane_pack_gamma(trace_info.length(), &options);
 
-        eprintln!("[AIR::new] ProofOptions for gamma calculation:");
-        eprintln!("  trace_length: {}", trace_info.length());
-        eprintln!("  blowup_factor: {}", options.blowup_factor());
-        eprintln!("  grinding_factor: {}", options.grinding_factor());
-        eprintln!("  num_queries: {}", options.num_queries());
-        eprintln!("  => gamma: {:?}", gamma);
-
-        // Determine assertion count based on whether we'll add Merkle root assertions
-        let is_placeholder = pub_inputs.0.state_root.iter().all(|&b| b == 0x0a);
-        // +1 for BLAKE3 COMMIT_DIFF boundary assertion
-        let num_main_assertions = if is_placeholder { 12 } else { 16 };
+        // Main assertions: ACC(1) + SEL_FINAL(2) + COMMIT_DIFF(1) + DIFF(8) + state_root(4) = 16
+        let num_main_assertions = 16;
 
         // Define degrees for auxiliary constraints (GroveVM)
         // Migration to Winterfell 0.13.1: declare realistic upper bounds.
@@ -591,8 +543,8 @@ impl Air for GroveAir {
             multi_segment_info,
             main_degrees.clone(), // Main transition constraint degrees
             aux_degrees,          // Auxiliary transition constraint degrees
-            num_main_assertions,  // Main assertions (root, identity, etc.)
-            2,                    // Aux assertions (SP start + EdDSA accumulator at EDDSA_END)
+            num_main_assertions,  // Main assertions (root, identity, public inputs)
+            66,                   // Aux assertions: SP start(1) + EdDSA accumulator(1) + EdDSA identity point(64)
             options,
         );
 
@@ -683,39 +635,6 @@ impl Air for GroveAir {
 
     fn context(&self) -> &AirContext<Self::BaseField> {
         &self.context
-    }
-
-    // Override to zero-out boundary coefficients to help isolate OOD parity
-    fn get_constraint_composition_coefficients<E, R>(
-        &self,
-        public_coin: &mut R,
-    ) -> core::result::Result<
-        ConstraintCompositionCoefficients<E>,
-        winterfell::crypto::RandomCoinError,
-    >
-    where
-        E: FieldElement<BaseField = Self::BaseField>,
-        R: winterfell::crypto::RandomCoin<BaseField = Self::BaseField>,
-    {
-        // Draw linear coefficients as usual
-        let num_t = self.context.num_transition_constraints();
-        let num_b = self.context.num_assertions();
-        let mut coeffs = ConstraintCompositionCoefficients::draw_linear(public_coin, num_t, num_b)?;
-
-        // Optional isolation mode: zero-out boundary coefficients to remove boundary
-        // contribution from OOD checks. Enable by setting GS_ISOLATE_OOD=1 when debugging.
-        if !coeffs.boundary.is_empty() && std::env::var("GS_ISOLATE_OOD").unwrap_or_default() == "1"
-        {
-            eprintln!(
-                "[AIR] Zeroing {} boundary composition coefficients (isolation mode)",
-                coeffs.boundary.len()
-            );
-            for c in coeffs.boundary.iter_mut() {
-                *c = E::ZERO;
-            }
-        }
-
-        Ok(coeffs)
     }
 
     fn get_periodic_column_values(&self) -> Vec<Vec<Self::BaseField>> {
@@ -1058,70 +977,12 @@ impl Air for GroveAir {
         out
     }
 
-    #[allow(unreachable_code)]
     fn evaluate_transition<E: FieldElement<BaseField = Self::BaseField>>(
         &self,
         frame: &EvaluationFrame<E>,
         periodic: &[E],
         result: &mut [E],
     ) {
-        // One-time OOD probe to compare selector/periodic values between prover and verifier
-        // Prints in release as well; kept minimal and runs only on first invocation.
-        {
-            use core::sync::atomic::{AtomicBool, Ordering};
-            static ONCE: AtomicBool = AtomicBool::new(true);
-            if ONCE.swap(false, Ordering::SeqCst) {
-                let cur = frame.current();
-                let to_u64 = |v: E| {
-                    let bytes = v.as_bytes();
-                    let mut tmp = [0u8; 8];
-                    let take = core::cmp::min(8, bytes.len());
-                    tmp[..take].copy_from_slice(&bytes[..take]);
-                    u64::from_le_bytes(tmp)
-                };
-                let sel_b = if SEL_BLAKE3_COL < cur.len() {
-                    to_u64(cur[SEL_BLAKE3_COL])
-                } else {
-                    0
-                };
-                let sel_m = if SEL_MERKLE_COL < cur.len() {
-                    to_u64(cur[SEL_MERKLE_COL])
-                } else {
-                    0
-                };
-                let sel_e = if SEL_EDDSA_COL < cur.len() {
-                    to_u64(cur[SEL_EDDSA_COL])
-                } else {
-                    0
-                };
-                let pb = if P_B < periodic.len() {
-                    to_u64(periodic[P_B])
-                } else {
-                    0
-                };
-                let pm = if P_M < periodic.len() {
-                    to_u64(periodic[P_M])
-                } else {
-                    0
-                };
-                let pe = if P_E < periodic.len() {
-                    to_u64(periodic[P_E])
-                } else {
-                    0
-                };
-                eprintln!(
-                    "[OOD-PROBE] cur.len={} sel(B,M,E)=({},{},{}) per(B,M,E)=({},{},{})",
-                    cur.len(),
-                    sel_b,
-                    sel_m,
-                    sel_e,
-                    pb,
-                    pm,
-                    pe
-                );
-            }
-        }
-
         // Assertions and zero-init
         assert_eq!(
             result.len(),
@@ -1136,7 +997,7 @@ impl Air for GroveAir {
         // Each phase writes to its own slice starting at index 0
         if !LAYOUT.blake3.is_empty() {
             let blake3_slice = result.get_mut(LAYOUT.blake3.clone()).unwrap();
-            evaluate_blake3_phase(blake3_slice, frame, periodic);
+            evaluate_blake3_phase(blake3_slice, frame, periodic, self.gamma);
         }
 
         if !LAYOUT.merkle.is_empty() {
@@ -1150,6 +1011,15 @@ impl Air for GroveAir {
             };
             evaluate_merkle_stub(merkle_slice, frame, per_m, self.gamma);
         }
+
+        // Identity binding: DIFF[i] = OWNER_ID[i] - IDENTITY_ID[i]
+        // NOTE: This transition constraint is currently disabled because of a column overlap:
+        // Merkle join storage (store_bytes_for_join) writes 64-bit values to columns 72-87
+        // at various Merkle rows, while the identity binding expects 32-bit values. Since P_M
+        // gates ALL Merkle rows, the constraint fires at rows with incompatible 64-bit values.
+        // Fix requires relocating Merkle join storage columns. Boundary assertions at JOIN_ROW
+        // (DIFF = 0) provide partial security in the interim.
+        // identity_slice[0] = periodic[P_M] * packed;
 
         // EdDSA SEL_FINAL transition: OOD-stable form using only current row + periodic
         // Enforce: during EdDSA phase, SEL_FINAL equals the one-hot periodic P_EDDSA_FINAL.
@@ -1169,335 +1039,7 @@ impl Air for GroveAir {
             "constraint vector length drift"
         );
 
-        // CE-parity probe at the end
-        self.ce_parity_probe("evaluate_transition_end", result);
-
-        return;
-
-        if false {
-            // MULTI-SEGMENT: Check if we have auxiliary columns
-            // If so, EdDSA values come from auxiliary frame
-
-            // Zero the result buffer (researcher's fix #1)
-            for r in result.iter_mut() {
-                *r = E::ZERO;
-            }
-
-            let cur = frame.current();
-            let nxt = frame.next();
-
-            // Check frame width - should be main trace width for multi-segment
-            let expected_width = MAIN_TRACE_WIDTH;
-            if cur.len() != expected_width {
-                eprintln!(
-                    "WARNING: Frame width is {}, expected main width {}",
-                    cur.len(),
-                    expected_width
-                );
-                // Don't panic - winterfell might still be single-segment during transition
-            }
-
-            // ---------- short aliases for periodics (dummy under if-false block) ----------
-            let g = E::ONE;
-            let s = |_: usize| E::ZERO;
-            let k = |_: usize| E::ZERO;
-            let gw = |_: usize| E::ZERO;
-
-            // 16^k bases and rotated mappings: select via k(i) to keep algebraic at OOD
-            let p16 = (0..8)
-                .map(|i| k(i) * periodic[P_P16_0 + i])
-                .fold(E::ZERO, |a, b| a + b);
-            let p16s2 = (0..8)
-                .map(|i| k(i) * periodic[P_P16S2_0 + i])
-                .fold(E::ZERO, |a, b| a + b);
-            let p16s3 = (0..8)
-                .map(|i| k(i) * periodic[P_P16S3_0 + i])
-                .fold(E::ZERO, |a, b| a + b);
-            let p16s4 = (0..8)
-                .map(|i| k(i) * periodic[P_P16S4_0 + i])
-                .fold(E::ZERO, |a, b| a + b);
-
-            // Message one-hots (only used on S0 / S4)
-            let _pick_mx = |msgs: &[E]| {
-                (0..16)
-                    .map(|t| periodic[P_MX0 + t] * msgs[t])
-                    .fold(E::ZERO, |a, b| a + b)
-            };
-            let _pick_my = |msgs: &[E]| {
-                (0..16)
-                    .map(|t| periodic[P_MY0 + t] * msgs[t])
-                    .fold(E::ZERO, |a, b| a + b)
-            };
-
-            // ASRC/BSRC routing for each micro-step: linear pickers over v[0..15]
-            let _pick_asrc = |s_idx: usize, vs: &[E]| {
-                let base = P_ASRC_S0_0 + 16 * s_idx;
-                (0..16)
-                    .map(|j| periodic[base + j] * vs[j])
-                    .fold(E::ZERO, |a, b| a + b)
-            };
-            let _pick_bsrc = |s_idx: usize, vs: &[E]| {
-                let base = P_BSRC_S0_0 + 16 * s_idx;
-                (0..16)
-                    .map(|j| periodic[base + j] * vs[j])
-                    .fold(E::ZERO, |a, b| a + b)
-            };
-
-            // RESEARCH TEAM FIX: Use committed selector columns instead of periodic gates
-            // This ensures consistent evaluation at OOD point
-
-            // Debug: Check if we're at OOD evaluation (disabled for production)
-            // static EVAL_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-            // let eval_num = EVAL_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            // if eval_num < 5 {
-            //     eprintln!("DEBUG: evaluate_transition #{}, cur.len()={}, expecting {}",
-            //         eval_num, cur.len(), MAIN_TRACE_WIDTH + AUX_TRACE_WIDTH);
-            // }
-
-            // Avoid periodic gates in BLAKE3; rely on committed step selectors only
-
-            // Pack helpers
-            let two = E::ONE + E::ONE;
-            let sixteen = E::from(16u32);
-
-            // Nibble values built from bit-slices
-            let a_nib =
-                cur[A_B0] + two * cur[A_B1] + E::from(4u32) * cur[A_B2] + E::from(8u32) * cur[A_B3];
-            let b_nib =
-                cur[B_B0] + two * cur[B_B1] + E::from(4u32) * cur[B_B2] + E::from(8u32) * cur[B_B3];
-            let m_nib =
-                cur[M_B0] + two * cur[M_B1] + E::from(4u32) * cur[M_B2] + E::from(8u32) * cur[M_B3];
-            let z_nib =
-                cur[Z_B0] + two * cur[Z_B1] + E::from(4u32) * cur[Z_B2] + E::from(8u32) * cur[Z_B3];
-
-            // Gates we reuse (committed step selectors)
-            let s_add = s(0) + s(2) + s(4) + s(6);
-            let _s_xor = s(1) + s(3) + s(5) + s(7);
-            let _k0 = k(0);
-
-            // Build linear views of current words and messages
-            let _v_cur: Vec<E> = (0..16).map(|j| cur[V0 + j]).collect();
-            let v_next: Vec<E> = (0..16).map(|j| nxt[V0 + j]).collect();
-            let _m_cur: Vec<E> = (0..16).map(|j| cur[MSG0 + j]).collect();
-
-            // Build MsgView for phase-aware message access
-            let s_b = periodic[P_B]; // BLAKE3/doc phase gate
-            let p_m = periodic[P_M]; // Merkle phase gate
-            let p_m_comp = periodic[P_M_COMP]; // Merkle COMP sub-phase
-            let g_comp_m = p_m * p_m_comp; // Merkle compression gate
-            let msg_view = MsgView {
-                g_doc: s_b,
-                g_merkle: g_comp_m,
-                doc_base: MSG0,
-                merkle_msg: MERKLE_MSG,
-            };
-
-            // ------  constraint assembly ------
-            let mut ci = 0;
-
-            // (1) bit binarity for all 16 bits we expose per row (A/B/M/Z nibbles) -- aggregated, gated by any S
-            let any_s = s(0) + s(1) + s(2) + s(3) + s(4) + s(5) + s(6) + s(7);
-            let mut bits_binarity = E::ZERO;
-            for &b in &[
-                A_B0, A_B1, A_B2, A_B3, B_B0, B_B1, B_B2, B_B3, M_B0, M_B1, M_B2, M_B3, Z_B0, Z_B1,
-                Z_B2, Z_B3,
-            ] {
-                bits_binarity += cur[b] * (cur[b] - E::ONE);
-            }
-            result[ci] = any_s * bits_binarity;
-            ci += 1;
-
-            // (2–4) quotient chains for SRC_A / SRC_B / SRC_M
-            let mut acc_a = E::ZERO;
-            let mut acc_b = E::ZERO;
-            for ki in 0..7 {
-                // The nibble expression is the same for all k
-                let expr_a = cur[SRC_A] - sixteen * nxt[SRC_A] - a_nib;
-                let expr_b = cur[SRC_B] - sixteen * nxt[SRC_B] - b_nib;
-                acc_a += k(ki) * expr_a;
-                acc_b += k(ki) * expr_b;
-            }
-            // k(ki) is already a BLAKE3 sub-phase one-hot (zero outside BLAKE3), so g is redundant
-            result[ci] = g * acc_a;
-            ci += 1;
-            result[ci] = g * acc_b;
-            ci += 1;
-
-            // SRC_M is only meaningful on S0 and S4
-            let s_m = s(0) + s(4);
-            let mut acc_m = E::ZERO;
-            for ki in 0..7 {
-                let expr_m = cur[SRC_M] - sixteen * nxt[SRC_M] - m_nib;
-                acc_m += k(ki) * s_m * expr_m;
-            }
-            result[ci] = g * acc_m;
-            ci += 1;
-
-            // (5) ACC recurrence: nxt[ACC] = cur[ACC] + z_nib * p16_for_step
-            let p16_for_step = (s(0) + s(2) + s(4) + s(6)) * p16
-                + s(1) * p16s4
-                + s(3) * p16s3
-                + s(5) * p16s2
-                + s(7) * p16s2; // ROTR7 uses ROTR8's nibble placement, bit shift handled below
-            let mut acc_acc = E::ZERO;
-            for ki in 0..7 {
-                let expr = nxt[ACC] - (cur[ACC] + z_nib * p16_for_step);
-                acc_acc += k(ki) * expr;
-            }
-            result[ci] = g * acc_acc;
-            ci += 1;
-
-            // (6) commit at K7 — gate only by phase+step (no extra k(7) factor)
-            // step-dependent 16^• base for this row
-            let p16_for_step = (s(0) + s(2) + s(4) + s(6)) * p16
-                + s(1) * p16s4
-                + s(3) * p16s3
-                + s(5) * p16s2
-                + s(7) * p16s2;
-
-            let acc_final = cur[ACC] + z_nib * p16_for_step;
-            // (6a) commit — no-writes on K0..K6
-            let mut k0_6 = E::ZERO;
-            for i in 0..7 {
-                k0_6 += k(i);
-            }
-            let mut sum_dv = E::ZERO;
-            for j in 0..16 {
-                sum_dv += v_next[j] - cur[V0 + j];
-            }
-            result[ci] = g * k0_6 * sum_dv;
-            ci += 1;
-
-            // (6b) commit — at K7, target equals acc_final
-            let mut target_err = E::ZERO; // Σ GW(j)·(nxt[Vj] − acc_final)
-            for j in 0..16 {
-                target_err += gw(j) * (v_next[j] - acc_final);
-            }
-            result[ci] = g * s(7) * target_err;
-            ci += 1;
-
-            // (6c) commit — at K7, non-targets unchanged
-            let mut others_err = E::ZERO; // Σ (1−GW(j))·(nxt[Vj] − cur[Vj])
-            for j in 0..16 {
-                others_err += (E::ONE - gw(j)) * (v_next[j] - cur[V0 + j]);
-            }
-            result[ci] = g * s(7) * others_err;
-            ci += 1;
-
-            // (7) reset ACC at the start of every nibble scan block
-            result[ci] = g * k(0) * cur[ACC];
-            ci += 1;
-
-            // (8) adders (S0,S2,S4,S6):  z + 16*c' = a + b + m_used + c
-            let m_used = s_m * m_nib; // zero on S2/S6
-            let add_res = z_nib + sixteen * nxt[CARRY] - (a_nib + b_nib + m_used + cur[CARRY]);
-            result[ci] = g * s_add * add_res;
-            ci += 1;
-
-            // (9) XOR steps (S1,S3,S5 ONLY - S7 has a special carry lane)
-            let s_xor_135 = s(1) + s(3) + s(5);
-            let xor_bit = |ab: usize, bb: usize, zb: usize| -> E {
-                cur[zb] - (cur[ab] + cur[bb] - two * cur[ab] * cur[bb])
-            };
-            let xor_res = xor_bit(A_B0, B_B0, Z_B0)
-                + xor_bit(A_B1, B_B1, Z_B1)
-                + xor_bit(A_B2, B_B2, Z_B2)
-                + xor_bit(A_B3, B_B3, Z_B3);
-            result[ci] = g * s_xor_135 * xor_res;
-            ci += 1;
-
-            // Response 21: XOR bits per position (degree-2), S7 only
-            let x0 = cur[A_B0] + cur[B_B0] - two * cur[A_B0] * cur[B_B0];
-            let x1 = cur[A_B1] + cur[B_B1] - two * cur[A_B1] * cur[B_B1];
-            let x2 = cur[A_B2] + cur[B_B2] - two * cur[A_B2] * cur[B_B2];
-            let x3 = cur[A_B3] + cur[B_B3] - two * cur[A_B3] * cur[B_B3];
-
-            // (10) ROTR7 in-nibble wiring (S7 only):
-            //   z0 = ROT_CARRY
-            //   z1 = x0, z2 = x1, z3 = x2; next ROT_CARRY = x3
-            let rot7 = (cur[Z_B0] - cur[ROT_CARRY])
-                + (cur[Z_B1] - x0)
-                + (cur[Z_B2] - x1)
-                + (cur[Z_B3] - x2)
-                + (nxt[ROT_CARRY] - x3);
-            result[ci] = g * s(7) * rot7;
-            ci += 1;
-
-            // Response 18: Use ASRC/BSRC periodic one-hots for binding
-            // Helper to read ASRC/BSRC one-hots: asrc(t,j) / bsrc(t,j)
-            let asrc = |t: usize, j: usize| periodic[P_ASRC0 + t * 16 + j];
-            let bsrc = |t: usize, j: usize| periodic[P_BSRC0 + t * 16 + j];
-
-            // (11) Bind SRC_A at K0 to the correct V[j] selected by ASRC for the active S-step
-            let mut a_mux = E::ZERO;
-            for t in 0..8 {
-                let mut row_sum = E::ZERO;
-                for j in 0..16 {
-                    row_sum += asrc(t, j) * (cur[SRC_A] - cur[V0 + j]);
-                }
-                a_mux += s(t) * row_sum;
-            }
-            result[ci] = g * k(0) * a_mux;
-            ci += 1;
-
-            // (12) Bind SRC_B at K0 to the correct V[j] selected by BSRC for the active S-step
-            let mut b_mux = E::ZERO;
-            for t in 0..8 {
-                let mut row_sum = E::ZERO;
-                for j in 0..16 {
-                    row_sum += bsrc(t, j) * (cur[SRC_B] - cur[V0 + j]);
-                }
-                b_mux += s(t) * row_sum;
-            }
-            result[ci] = g * k(0) * b_mux;
-            ci += 1;
-
-            // (13) Bind SRC_M at K0 only for S0/S4 (MX/MY)
-            let mx = |j: usize| periodic[P_MX0 + j];
-            let my = |j: usize| periodic[P_MY0 + j];
-            let mut _m_bind = E::ZERO;
-            let mut sum_mx = E::ZERO;
-            for j in 0..16 {
-                sum_mx += mx(j) * (cur[SRC_M] - msg_view.get(cur, j));
-            }
-            let mut sum_my = E::ZERO;
-            for j in 0..16 {
-                sum_my += my(j) * (cur[SRC_M] - msg_view.get(cur, j));
-            }
-            _m_bind = s(0) * sum_mx + s(4) * sum_my;
-            result[ci] = g * k(0) * _m_bind;
-            ci += 1;
-
-            // Merkle phase constraints are handled via slices in the early return path above
-            // (see lines 771-782 where evaluate_merkle_stub is called)
-            // With lane packing, we now have only 6 Merkle constraints
-            ci += 6; // Skip 6 lane-packed Merkle constraint slots (constraints 13-18)
-
-            // EdDSA phase constraints
-            // SEL_FINAL transition constraint: keep constant across rows (researcher's fix)
-            let p_e = periodic[P_E];
-            result[ci] = p_e * (nxt[SEL_FINAL] - cur[SEL_FINAL]);
-            ci += 1;
-
-            // IDENTITY CONSTRAINTS REMOVED - now enforced via boundary assertions on DIFF columns
-            // SINGLE-SEGMENT: Now add aux constraints (they are in the same segment)
-            // Aux constraints start at index NUM_CONSTRAINTS
-
-            // EdDSA constraints are handled in evaluate_aux_transition for multi-segment traces
-
-            // Identity constraints are enforced via boundary assertions on DIFF columns
-
-            // Debug: Verify we filled all main constraints
-            #[cfg(debug_assertions)]
-            eprintln!("DEBUG: Filled {} main constraints", ci);
-            assert_eq!(
-                ci, NUM_CONSTRAINTS,
-                "Wrote {} constraints but declared {}",
-                ci, NUM_CONSTRAINTS
-            );
-        }
     }
-    #[allow(unreachable_code)]
     fn evaluate_aux_transition<F, E>(
         &self,
         _main_frame: &EvaluationFrame<F>,
@@ -1522,15 +1064,6 @@ impl Air for GroveAir {
 
         // Skip EdDSA columns (0-63) and get GroveVM columns (64+)
         let grovevm_start = 64;
-
-        // Debug: Verify we have enough columns
-        if aux_current.len() < grovevm_start + GROVEVM_AUX_WIDTH {
-            eprintln!(
-                "WARNING: Auxiliary trace too narrow: {} < {}",
-                aux_current.len(),
-                grovevm_start + GROVEVM_AUX_WIDTH
-            );
-        }
 
         // CRITICAL: Only take exactly GROVEVM_AUX_WIDTH columns, not all remaining columns
         let grovevm_end = grovevm_start + GROVEVM_AUX_WIDTH;
@@ -1573,6 +1106,8 @@ impl Air for GroveAir {
             grovevm_constraints.evaluate(grovevm_current, grovevm_next, blake3_output.as_ref());
 
         // Copy GroveVM constraint results to output
+        // GroveVM produces NUM_GROVEVM_CONSTRAINTS; remaining slots are for EdDSA aux constraints
+        const NUM_GROVEVM_CONSTRAINTS: usize = 12;
         debug_assert!(
             result.len() >= NUM_AUX_CONSTRAINTS,
             "Result buffer too small: {} < {}",
@@ -1581,20 +1116,11 @@ impl Air for GroveAir {
         );
         debug_assert_eq!(
             grovevm_results.len(),
-            NUM_AUX_CONSTRAINTS,
+            NUM_GROVEVM_CONSTRAINTS,
             "GroveVM returned wrong number of constraints: {} != {}",
             grovevm_results.len(),
-            NUM_AUX_CONSTRAINTS
+            NUM_GROVEVM_CONSTRAINTS
         );
-
-        // Debug: Log constraint count mismatch if any
-        if grovevm_results.len() != NUM_AUX_CONSTRAINTS {
-            eprintln!(
-                "ERROR: GroveVM returned {} constraints but expected {}",
-                grovevm_results.len(),
-                NUM_AUX_CONSTRAINTS
-            );
-        }
 
         for (i, constraint_value) in grovevm_results.iter().enumerate() {
             if i < result.len() {
@@ -1627,122 +1153,72 @@ impl Air for GroveAir {
         let ed2 = wval - (wb0 + E::from(2u32) * wb1 + E::from(4u32) * wb2 + E::from(8u32) * wb3);
         // Pack ED1/ED2 together using gamma to reduce multiple exposed slots at OOD
         let gamma_e = E::from(self.gamma);
-        let _ed_pack = ed1 + gamma_e * ed2;
-        // Live EDDSA aux injection disabled: rely on accumulator + boundary assertion only.
-        // EdDSA aux mirrors and accumulator are always computed; enforcement is via aux assertion.
+        let ed_pack = ed1 + gamma_e * ed2;
+        // EdDSA window bit constraint: booleanity + value = packed bits
+        if result.len() > 12 {
+            result[12] = _p_e_gate * ed_pack;
+        }
 
         // Phase 3: Bind BLAKE3 message lanes to GroveVM stack on merge operations.
         // Ensure MSG0..MSG7 equal left limbs and MSG8..MSG15 equal right limbs (swapped for Child).
         // Pack limb residuals with gamma and add into the merge-write constraint slot (index 9).
+        // Phase 3: Bind BLAKE3 message lanes to GroveVM stack on merge operations.
+        // Uses algebraic sp_eq for slot selection instead of decode_small.
         if result.len() >= NUM_AUX_CONSTRAINTS {
             let is_parent = grovevm_current[crate::phases::grovevm::types::OP_PARENT];
             let is_child = grovevm_current[crate::phases::grovevm::types::OP_CHILD];
             let is_merge = is_parent + is_child;
+            let sp_val = grovevm_current[crate::phases::grovevm::types::SP];
 
-            // Decode SP from aux value (0..16 expected)
-            let decode_small = |v: E| -> usize {
-                let mut found = 0usize;
-                for i in 0..16 {
-                    if v == E::from(BaseElement::new(i as u64)) {
-                        found = i;
-                        break;
+            // Algebraic Lagrange indicator for SP over domain 0..=D_MAX
+            let sp_eq_e = |v: E, c: usize| -> E {
+                let d_max = crate::phases::grovevm::types::D_MAX;
+                let mut num = E::ONE;
+                for kk in 0..=d_max {
+                    if kk != c {
+                        let diff = E::from(BaseElement::new(c as u64))
+                            - E::from(BaseElement::new(kk as u64));
+                        num = num * (v - E::from(BaseElement::new(kk as u64)));
+                        num = num * diff.inv();
                     }
                 }
-                found
+                num
             };
-            let sp_val = decode_small(grovevm_current[crate::phases::grovevm::types::SP]);
 
-            if sp_val >= 2 {
-                let stack_base_left = crate::phases::grovevm::types::STACK_START
-                    + (sp_val - 2) * crate::phases::grovevm::types::LIMBS_PER_HASH;
-                let stack_base_right = crate::phases::grovevm::types::STACK_START
-                    + (sp_val - 1) * crate::phases::grovevm::types::LIMBS_PER_HASH;
-
-                let mut gp = E::ONE;
-                let mut packed_msg = E::ZERO;
-                for limb in 0..crate::phases::grovevm::types::LIMBS_PER_HASH {
-                    let left_limb = grovevm_current[stack_base_left + limb];
-                    let right_limb = grovevm_current[stack_base_right + limb];
-
-                    // Read MSG limbs from main trace
-                    let m_left = E::from(main_current[MSG0 + limb]);
-                    let m_right = E::from(main_current[MSG0 + 8 + limb]);
-
-                    // Expected limbs based on op type: Parent => (left,right); Child => (right,left)
-                    let exp_left = (E::ONE - is_child) * left_limb + is_child * right_limb;
-                    let exp_right = (E::ONE - is_child) * right_limb + is_child * left_limb;
-
-                    let limb_res = (m_left - exp_left) + (m_right - exp_right);
-                    packed_msg = packed_msg + gp * limb_res;
-                    gp = gp * E::from(self.gamma);
+            let mut gp = E::ONE;
+            let mut packed_msg = E::ZERO;
+            for limb in 0..crate::phases::grovevm::types::LIMBS_PER_HASH {
+                // Algebraically select left and right limbs via sp_eq
+                let mut left_limb = E::ZERO;
+                let mut right_limb = E::ZERO;
+                for sp_c in 2..=crate::phases::grovevm::types::D_MAX {
+                    let eq_c = sp_eq_e(sp_val, sp_c);
+                    let base_left = crate::phases::grovevm::types::STACK_START
+                        + (sp_c - 2) * crate::phases::grovevm::types::LIMBS_PER_HASH;
+                    let base_right = crate::phases::grovevm::types::STACK_START
+                        + (sp_c - 1) * crate::phases::grovevm::types::LIMBS_PER_HASH;
+                    left_limb += eq_c * grovevm_current[base_left + limb];
+                    right_limb += eq_c * grovevm_current[base_right + limb];
                 }
 
-                // Merge into slot 9 (merge write constraint) with is_merge gate
-                let idx_merge_write = 9usize;
-                if idx_merge_write < result.len() {
-                    result[idx_merge_write] = result[idx_merge_write] + is_merge * packed_msg;
-                }
+                let m_left = E::from(main_current[MSG0 + limb]);
+                let m_right = E::from(main_current[MSG0 + 8 + limb]);
+
+                let exp_left = (E::ONE - is_child) * left_limb + is_child * right_limb;
+                let exp_right = (E::ONE - is_child) * right_limb + is_child * left_limb;
+
+                let limb_res = (m_left - exp_left) + (m_right - exp_right);
+                packed_msg = packed_msg + gp * limb_res;
+                gp = gp * E::from(self.gamma);
+            }
+
+            // Merge into slot 10 (merge write constraint, shifted +1 for at-most-one)
+            let idx_merge_write = 10usize;
+            if idx_merge_write < result.len() {
+                result[idx_merge_write] = result[idx_merge_write] + is_merge * packed_msg;
             }
         }
 
-        // Debug logging (thread-safe via atomic counter)
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        static EVAL_COUNT: AtomicUsize = AtomicUsize::new(0);
-        let eval_num = EVAL_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
-        if eval_num <= 3 {
-            eprintln!(
-                "[GroveVM/AUX] Evaluation #{}: {} constraints",
-                eval_num, NUM_AUX_CONSTRAINTS
-            );
-            eprintln!(
-                "  GroveVM columns start at: {}, total aux cols: {}",
-                grovevm_start,
-                aux_current.len()
-            );
-            eprintln!("  GroveVM expects {} columns", GROVEVM_AUX_WIDTH);
-            eprintln!("  Result buffer length: {}", result.len());
-            // Check first few constraint values
-            for (i, val) in grovevm_results.iter().take(3).enumerate() {
-                // We can't print the value directly but we can check if it's zero
-                let is_zero = *val == E::ZERO;
-                eprintln!("  Constraint[{}] is_zero: {}", i, is_zero);
-            }
-            // Check the actual column values
-            if grovevm_current.len() >= 6 {
-                eprintln!("  First GroveVM columns:");
-                for i in 0..6 {
-                    let is_one = grovevm_current[i] == E::ONE;
-                    let is_zero = grovevm_current[i] == E::ZERO;
-                    eprintln!("    Col[{}]: is_one={}, is_zero={}", i, is_one, is_zero);
-                }
-                // Debug: Try to see what constraint 0 actually evaluates to
-                let op_ph = grovevm_current[0];
-                let constraint_0 = op_ph * (op_ph - E::ONE);
-                eprintln!(
-                    "    op_ph * (op_ph - 1) is_zero: {}",
-                    constraint_0 == E::ZERO
-                );
-            }
-        }
-
-        // Optional debug hash
-        #[cfg(debug_assertions)]
-        {
-            use blake3::Hasher;
-            let mut h = Hasher::new();
-            for _i in 0..NUM_AUX_CONSTRAINTS {
-                // Hash the constraint values to verify they match
-                // We can't use as_int() on generic E, so skip the hash for now
-                // This is just for debugging anyway
-            }
-            h.update(b"placeholder");
-            eprintln!(
-                "[AUX/OOD] constraint hash={:016x}",
-                h.finalize().as_bytes()[0..8]
-                    .iter()
-                    .fold(0u64, |acc, &b| (acc << 8) | b as u64)
-            );
-        }
     }
 
     fn get_assertions(&self) -> Vec<Assertion<Self::BaseField>> {
@@ -1773,20 +1249,17 @@ impl Air for GroveAir {
 
         // Merkle root must match public state root at end of Merkle phase
         let state_root_bytes = &self.public_inputs.0.state_root;
-        let is_placeholder = state_root_bytes.iter().all(|&b| b == 0x0a);
         const MERKLE_LAST_ROW: usize = MERKLE_END;
-        if !is_placeholder {
-            for i in 0..4 {
-                let mut value = 0u64;
-                for j in 0..8 {
-                    value |= (state_root_bytes[i * 8 + j] as u64) << (j * 8);
-                }
-                assertions.push(Assertion::single(
-                    V0 + i,
-                    MERKLE_LAST_ROW,
-                    BaseElement::new(value),
-                ));
+        for i in 0..4 {
+            let mut value = 0u64;
+            for j in 0..8 {
+                value |= (state_root_bytes[i * 8 + j] as u64) << (j * 8);
             }
+            assertions.push(Assertion::single(
+                V0 + i,
+                MERKLE_LAST_ROW,
+                BaseElement::new(value),
+            ));
         }
 
         assertions
@@ -1801,6 +1274,27 @@ impl Air for GroveAir {
         v.push(Assertion::single(64 + 4, 0, E::ZERO));
         // EdDSA accumulator boundary at EDDSA_END (dedicated aux column)
         v.push(Assertion::single(AUX_TRACE_WIDTH - 1, EDDSA_END, E::ZERO));
+
+        // EdDSA identity point assertions at EDDSA_END: (X=0, Y=1, Z=1, T=0)
+        // X = 0 (16 limbs, aux columns 0-15)
+        for i in 0..16 {
+            v.push(Assertion::single(X_COLS[i], EDDSA_END, E::ZERO));
+        }
+        // Y = 1 (limb 0 = 1, rest = 0, aux columns 16-31)
+        v.push(Assertion::single(Y_COLS[0], EDDSA_END, E::ONE));
+        for i in 1..16 {
+            v.push(Assertion::single(Y_COLS[i], EDDSA_END, E::ZERO));
+        }
+        // Z = 1 (limb 0 = 1, rest = 0, aux columns 32-47)
+        v.push(Assertion::single(Z_COLS[0], EDDSA_END, E::ONE));
+        for i in 1..16 {
+            v.push(Assertion::single(Z_COLS[i], EDDSA_END, E::ZERO));
+        }
+        // T = 0 (16 limbs, aux columns 48-63)
+        for i in 0..16 {
+            v.push(Assertion::single(T_COLS[i], EDDSA_END, E::ZERO));
+        }
+
         v
     }
 }
@@ -1851,7 +1345,6 @@ impl<C: winterfell::crypto::RandomCoin> winterfell::crypto::RandomCoin for Trace
     type Hasher = C::Hasher;
 
     fn new(seed: &[Self::BaseField]) -> Self {
-        // eprintln!("🔍 COIN:new seed_len={}", seed.len());
         Self(C::new(seed))
     }
 
@@ -1859,17 +1352,13 @@ impl<C: winterfell::crypto::RandomCoin> winterfell::crypto::RandomCoin for Trace
         &mut self,
         data: <<C as winterfell::crypto::RandomCoin>::Hasher as winterfell::crypto::Hasher>::Digest,
     ) {
-        // eprintln!("🔍 COIN:reseed with digest");
         self.0.reseed(data)
     }
 
     fn draw<E: winterfell::math::FieldElement<BaseField = Self::BaseField>>(
         &mut self,
     ) -> std::result::Result<E, winterfell::crypto::RandomCoinError> {
-        let x = self.0.draw::<E>()?;
-        // let z = if x == E::ZERO { "❌ ZERO" } else { "✅ NZ" };
-        // eprintln!("🔍 COIN:draw -> {}", z);
-        Ok(x)
+        self.0.draw::<E>()
     }
 
     fn draw_integers(
@@ -1878,12 +1367,10 @@ impl<C: winterfell::crypto::RandomCoin> winterfell::crypto::RandomCoin for Trace
         domain_size: usize,
         nonce: u64,
     ) -> std::result::Result<Vec<usize>, winterfell::crypto::RandomCoinError> {
-        // eprintln!("🔍 COIN:draw_integers num={} domain={}", num_values, domain_size);
         self.0.draw_integers(num_values, domain_size, nonce)
     }
 
     fn check_leading_zeros(&self, value: u64) -> u32 {
-        // eprintln!("🔍 COIN:check_leading_zeros({}) -> {} zeros", value, zeros);
         self.0.check_leading_zeros(value)
     }
 }
@@ -1915,10 +1402,6 @@ pub struct GroveProver {
 
 impl GroveProver {
     pub fn new(config: STARKConfig) -> Self {
-        eprintln!(
-            "DEBUG: Creating prover with {} grinding bits",
-            config.grinding_bits
-        );
         let options = ProofOptions::new(
             config.num_queries,
             config.expansion_factor,
@@ -1971,20 +1454,12 @@ impl GroveProver {
 
             match GroveVMTraceBuilder::parse_grovevm_ops_from_proof(&witness.grovedb_proof) {
                 Ok((ops, tape)) => {
-                    eprintln!(
-                        "DEBUG: Parsed {} GroveVM operations and {} push tape entries",
-                        ops.len(),
-                        tape.len()
-                    );
-                    // Debug: Show first few operations
-                    for (i, op) in ops.iter().take(5).enumerate() {
-                        eprintln!("  Op[{}]: {:?}", i, op);
-                    }
                     *self.grovevm_operations.borrow_mut() = ops;
                     *self.grovevm_push_tape.borrow_mut() = tape;
                 }
-                Err(e) => {
-                    eprintln!("WARNING: Failed to parse GroveDB proof: {}", e);
+                Err(_e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("WARNING: Failed to parse GroveDB proof: {}", _e);
                 }
             }
         }
@@ -2002,10 +1477,6 @@ impl GroveProver {
         }
         if EDDSA_END < self.config.trace_length {
             main_columns[SEL_FINAL][EDDSA_END] = BaseElement::ONE;
-            eprintln!(
-                "DEBUG: Set SEL_FINAL[{}] = 1 at EDDSA_END={}",
-                SEL_FINAL, EDDSA_END
-            );
         }
 
         // Initialize committed selector columns. Set EdDSA active during EdDSA rows only.
@@ -2032,13 +1503,6 @@ impl GroveProver {
 
         // Write identity values only at JOIN_ROW using 32-bit limbs
         if JOIN_ROW < self.config.trace_length {
-            eprintln!(
-                "DEBUG: Writing identity values at JOIN_ROW {} (32-bit limbs)",
-                JOIN_ROW
-            );
-            eprintln!("  Owner ID: {:?}", hex::encode(&witness.owner_id));
-            eprintln!("  Identity ID: {:?}", hex::encode(&witness.identity_id));
-
             // Process as 8 x 32-bit limbs instead of 4 x 64-bit chunks
             for i in 0..8 {
                 let lo = i * 4;
@@ -2063,18 +1527,6 @@ impl GroveProver {
                 let diff =
                     BaseElement::new(limb_owner as u64) - BaseElement::new(limb_ident as u64);
                 main_columns[DIFF_ID32_COLS[i]][JOIN_ROW] = diff;
-
-                if diff != BaseElement::ZERO {
-                    eprintln!(
-                        "  ❌ DIFF[{}] at column {} = {} (non-zero = MISMATCH!)",
-                        i, DIFF_ID32_COLS[i], diff
-                    );
-                    eprintln!("     Trace has {} total columns", main_columns.len());
-                    eprintln!(
-                        "     Value at main_columns[{}][{}] = {}",
-                        DIFF_ID32_COLS[i], JOIN_ROW, main_columns[DIFF_ID32_COLS[i]][JOIN_ROW]
-                    );
-                }
             }
         }
 
@@ -2110,14 +1562,6 @@ impl GroveProver {
 
         // DO NOT create aux_columns here - they will be created in build_aux_trace
         // The EdDSA coordinate storage happens during fill_trace_step
-
-        // CRITICAL FIX: Verify DIFF values before creating trace
-        eprintln!("=== Verifying DIFF values before TraceTable::init ===");
-        for i in 0..8 {
-            let v = main_columns[DIFF_ID32_COLS[i]][JOIN_ROW];
-            eprintln!("FINAL DIFF[{}]@{} = {}", i, JOIN_ROW, v.as_int());
-            // In test with mismatched IDs, these should be non-zero
-        }
 
         // MULTI-SEGMENT: Create TraceTable with proper trace info
         // Note: TraceTable::init creates single-segment, but we'll convert to multi-segment
@@ -2343,12 +1787,6 @@ impl GroveProver {
 
         // Padding for remaining rows
         if step >= sig_end {
-            if step == EDDSA_END {
-                eprintln!(
-                    "DEBUG: At step {}, SEL_FINAL[{}] should be 1, actual value: {:?}",
-                    step, SEL_FINAL, main_columns[SEL_FINAL][step]
-                );
-            }
             for i in 0..MAIN_TRACE_WIDTH {
                 // Don't overwrite SEL_FINAL - it's pre-initialized
                 if i != SEL_FINAL {
@@ -2743,6 +2181,7 @@ fn evaluate_blake3_phase<E: FieldElement<BaseField = BaseElement>>(
     result: &mut [E],
     frame: &EvaluationFrame<E>,
     periodic: &[E],
+    gamma: BaseElement,
 ) {
     assert_eq!(
         result.len(),
@@ -2864,35 +2303,6 @@ fn evaluate_blake3_phase<E: FieldElement<BaseField = BaseElement>>(
     // Build linear views
     let v_next: Vec<E> = (0..16).map(|j| nxt[V0 + j]).collect();
 
-    let mut b3_only_idx: Option<usize> = None;
-    let mut b3_enable_set: Option<[bool; 15]> = None;
-    if let Ok(val) = std::env::var("GS_B3_ONLY_IDX") {
-        if let Ok(idx) = val.parse::<usize>() {
-            if idx < 15 {
-                b3_only_idx = Some(idx);
-                eprintln!("[B3-DIAG] Enabling only BLAKE3 constraint #{}", idx);
-            }
-        }
-    }
-    if b3_only_idx.is_none() {
-        if let Ok(val) = std::env::var("GS_B3_ENABLE_INDICES") {
-            let mut mask = [false; 15];
-            let mut any = false;
-            for part in val.split(',') {
-                if let Ok(idx) = part.trim().parse::<usize>() {
-                    if idx < 15 {
-                        mask[idx] = true;
-                        any = true;
-                    }
-                }
-            }
-            if any {
-                b3_enable_set = Some(mask);
-                eprintln!("[B3-DIAG] Enabling BLAKE3 constraints set: {}", val);
-            }
-        }
-    }
-
     // Constraint assembly
     let mut ci = 0;
 
@@ -2909,21 +2319,6 @@ fn evaluate_blake3_phase<E: FieldElement<BaseField = BaseElement>>(
     ci += 1;
 
     // (2-4) quotient chains - Emit constraints with proper S·K gating
-
-    // Lane-probe diagnostic
-    if std::env::var("GS_LANE_PROBE").is_ok() {
-        // Compute both sides at OOD point z to verify the fix
-        let lhs = (0..7)
-            .map(|i| k(i) * a_nib_i[i])
-            .fold(E::ZERO, |acc, x| acc + x);
-        let rhs = (0..7).map(|i| k(i)).fold(E::ZERO, |acc, x| acc + x) * a_nib_i[0]; // using first nibble as "shared"
-        eprintln!(
-            "[LANE-PROBE] a_nib: lhs={:?}, rhs={:?}, delta={:?}",
-            lhs,
-            rhs,
-            lhs - rhs
-        );
-    }
 
     // SRC_A quotient: use A nibble bits; gate by S(add) and K0..K6 (committed)
     let a_nib = cur[A_B0] + two * cur[A_B1] + E::from(4u32) * cur[A_B2] + E::from(8u32) * cur[A_B3];
@@ -2974,7 +2369,7 @@ fn evaluate_blake3_phase<E: FieldElement<BaseField = BaseElement>>(
     // Use nxt[ACC] as the committed final value to avoid base/rotation aliasing at OOD
     let _acc_final = cur[ACC];
 
-    // (i) No additional commit invariant on K0..K6 (enforced by other constraints) — masked
+    // (i) V registers frozen during K0..K6: no V register changes between rows
     let mut k0_6 = E::ZERO;
     for i in 0..7 {
         k0_6 += k(i);
@@ -2983,48 +2378,32 @@ fn evaluate_blake3_phase<E: FieldElement<BaseField = BaseElement>>(
     for j in 0..16 {
         sum_dv += v_next[j] - cur[V0 + j];
     }
+    // (C5) V registers frozen during K0..K6
+    // DISABLED: Requires trace generation audit - write_row's conditional V propagation
+    // may not maintain the invariance at all K0-K6 rows.
     let _ = (k0_6, sum_dv);
     result[ci] = E::ZERO;
     ci += 1;
 
-    // (ii) commit equality — enforce at next-row using next-row committed gates
-    // Use only next-row values for gating and operands to avoid cur/nxt drift.
-    let c6_val = E::ZERO;
-    {
-        use core::cmp::min;
-        use core::sync::atomic::{AtomicBool, Ordering};
-        static PRINTED: AtomicBool = AtomicBool::new(false);
-        if !PRINTED.swap(true, Ordering::SeqCst) {
-            let as_u64 = |x: E| {
-                let bytes = x.as_bytes();
-                let mut tmp = [0u8; 8];
-                let take = min(8, bytes.len());
-                tmp[..take].copy_from_slice(&bytes[..take]);
-                u64::from_le_bytes(tmp)
-            };
-            let mut gw_sum = E::ZERO;
-            for j in 0..16 {
-                gw_sum += gw_committed(j);
-            }
-            let mut vnext_target = E::ZERO;
-            for j in 0..16 {
-                vnext_target += gw_committed(j) * nxt[V0 + j];
-            }
-            eprintln!(
-                "[C6/DBG] gw_sum={} C6={} vnext_target={}",
-                as_u64(gw_sum),
-                as_u64(c6_val),
-                as_u64(vnext_target)
-            );
-        }
+    // (C6) At K7, target V register equals ACC
+    // DISABLED: The algebraic acc_final formula (cur[ACC] + z_nib * p16_for_step) doesn't
+    // align with the trace's commit_v_next which stores a pre-computed u32 value. The trace
+    // uses ACC_FINAL_COMMIT_COL + COMMIT_DIFF_COL boundary assertion instead.
+    let acc_final = cur[ACC] + z_nib * p16_for_step;
+    let mut target_v_next = E::ZERO;
+    for j in 0..16 {
+        target_v_next += gw_committed(j) * v_next[j];
     }
-    // C6: commit target equality at S7 using current-row committed mirror column
-    // Temporarily gated by env flag to avoid OOD inconsistency in CI by default.
-    let enable_c6 = std::env::var("GS_ENABLE_C6").unwrap_or_default() == "1";
-    result[ci] = if enable_c6 { c6_val } else { E::ZERO };
+    let _ = (acc_final, target_v_next);
+    result[ci] = E::ZERO;
     ci += 1;
 
-    // (iii) No per-lane non-target commit at K7 — algorithmic updates enforced elsewhere — masked
+    // (C7) At K7, non-target V registers unchanged (gamma-packed)
+    // DISABLED: Depends on C6 alignment. The trace uses commit_v_next which copies all
+    // V registers and overwrites the target, but constraint evaluation at OOD point
+    // requires exact algebraic matching.
+    let gamma_e = E::from(gamma);
+    let _ = gamma_e;
     result[ci] = E::ZERO;
     ci += 1;
 
@@ -3105,38 +2484,6 @@ fn evaluate_blake3_phase<E: FieldElement<BaseField = BaseElement>>(
     result[ci] = k(0) * m_bind;
 
     assert_eq!(ci + 1, 15, "BLAKE3 should write exactly 15 constraints");
-
-    // Apply diagnostic filter if requested
-    if let Some(only) = b3_only_idx {
-        for (j, v) in result.iter_mut().enumerate() {
-            if j != only {
-                *v = E::ZERO;
-            }
-        }
-    } else if let Some(mask) = b3_enable_set {
-        for (j, v) in result.iter_mut().enumerate() {
-            if j < mask.len() && !mask[j] {
-                *v = E::ZERO;
-            }
-        }
-    }
-
-    // One-time debug: dump BLAKE3 constraint values at OOD evaluation
-    {
-        use core::sync::atomic::{AtomicBool, Ordering};
-        static PRINTED_ONCE: AtomicBool = AtomicBool::new(false);
-        if !PRINTED_ONCE.swap(true, Ordering::SeqCst) {
-            let mut buf = alloc::string::String::new();
-            use alloc::fmt::Write as _;
-            let _ = write!(&mut buf, "[B3/DBG] nonzero idx:");
-            for (i, v) in result.iter().enumerate() {
-                if *v != E::ZERO {
-                    let _ = write!(&mut buf, " {}", i);
-                }
-            }
-            eprintln!("{}", buf);
-        }
-    }
 }
 
 /// Evaluate Merkle constraints with lane packing
@@ -3236,18 +2583,6 @@ impl Prover for GroveProver {
         aux_rand_elements: Option<AuxRandElements<E>>,
         composition_coefficients: ConstraintCompositionCoefficients<E>,
     ) -> Self::ConstraintEvaluator<'a, E> {
-        // Prove the coefficients aren't zero
-        eprintln!("🔍 DEBUG: composition_coefficients available - checking if they're zero");
-
-        // Try to access coefficients - this will help us understand the API
-        // For now, let's assume they exist and continue with other checks
-
-        // Confirm constraint counts match
-        eprintln!(
-            "🔍 DEBUG: air.num_transition_constraints = {}",
-            air.context().num_transition_constraints()
-        );
-
         DefaultConstraintEvaluator::new(air, aux_rand_elements, composition_coefficients)
     }
 
@@ -3264,10 +2599,6 @@ impl Prover for GroveProver {
     where
         E: FieldElement<BaseField = Self::BaseField>,
     {
-        eprintln!(
-            "DEBUG: build_constraint_commitment called with {} columns (normal for single-segment)",
-            num_constraint_composition_columns
-        );
         assert!(
             num_constraint_composition_columns > 0,
             "No composition columns; constraints ignored"
@@ -3463,19 +2794,10 @@ impl Prover for GroveProver {
                             aux_columns[64 + col][row] = E::from(value);
                         }
                     }
-                    eprintln!(
-                        "DEBUG: Added {} GroveVM columns to auxiliary trace",
-                        grovevm_matrix.num_cols()
-                    );
-                    // Debug: Check first row of GroveVM trace
-                    eprintln!("  First GroveVM row values:");
-                    for col in 0..6.min(grovevm_matrix.num_cols()) {
-                        let val = grovevm_matrix.get(col, 0);
-                        eprintln!("    Col[{}] = {}", col, val.as_int());
-                    }
                 }
-                Err(e) => {
-                    eprintln!("WARNING: Failed to build GroveVM trace: {}", e);
+                Err(_e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("WARNING: Failed to build GroveVM trace: {}", _e);
                     // Initialize GroveVM columns to zero on failure
                     // This ensures we have a valid auxiliary trace structure
                     use crate::phases::grovevm::GROVEVM_AUX_WIDTH;
@@ -3488,13 +2810,7 @@ impl Prover for GroveProver {
             }
         }
 
-        let aux_matrix = ColMatrix::new(aux_columns);
-        eprintln!(
-            "DEBUG: build_aux_trace returning {} aux columns with {} rows",
-            aux_matrix.num_cols(),
-            aux_matrix.num_rows()
-        );
-        aux_matrix
+        ColMatrix::new(aux_columns)
     }
 }
 
@@ -3532,8 +2848,7 @@ pub fn generate_proof(
         eprintln!("  Is multi-segment: {}", trace.info().is_multi_segment());
     }
 
-    // CRITICAL FIX: Build AIR and explicitly validate assertions
-    eprintln!("Building AIR for validation...");
+    // Build AIR for validation
     let proof_options = ProofOptions::new(
         config.num_queries,               // num_queries
         config.expansion_factor,          // blowup_factor
@@ -3552,13 +2867,9 @@ pub fn generate_proof(
     // This is EXTREMELY slow (checks all constraints for all 65536 rows)
     // Use: VALIDATE_TRACE=1 cargo test ... when debugging constraint issues
     if std::env::var("VALIDATE_TRACE").unwrap_or_default() == "1" {
-        eprintln!("🔍 Validating trace against AIR assertions (this will be SLOW)...");
-
         // This MUST panic if assertions are violated (e.g., tripwire or non-zero DIFFs)
         // validate() doesn't return a Result, it panics on failure
         trace.validate::<_, BaseElement>(&air, None);
-
-        eprintln!("✅ Trace validation passed!");
     }
 
     #[cfg(debug_assertions)]
@@ -3605,7 +2916,7 @@ pub fn generate_proof(
 pub fn verify_proof(
     proof_bytes: &[u8],
     public_inputs: &PublicInputs,
-    config: &STARKConfig,
+    _config: &STARKConfig,
 ) -> Result<bool> {
     // Deserialize the proof
     let proof = Proof::from_bytes(proof_bytes)
@@ -3614,18 +2925,7 @@ pub fn verify_proof(
     // Create public inputs wrapper
     let pub_inputs = GrovePublicInputs(public_inputs.clone());
 
-    // Log the PoW settings for debugging
-    let proof_grinding_bits = proof.options().grinding_factor();
-    eprintln!(
-        "DEBUG: Proof was generated with {} grinding bits",
-        proof_grinding_bits
-    );
-    eprintln!(
-        "DEBUG: Verifier expects {} grinding bits",
-        config.grinding_bits
-    );
-
-    // CRITICAL FIX: Use the ProofOptions from the proof itself for verification
+    // Use the ProofOptions from the proof itself for verification
     // This ensures gamma calculation matches between prover and verifier
     // The proof already contains the options it was generated with
     let proof_options = proof.options();
@@ -3644,20 +2944,8 @@ pub fn verify_proof(
 
     match result {
         Ok(()) => Ok(true),
-        Err(e) => {
-            eprintln!("❌ Winterfell verification failed: {:?}", e);
-            // Extra context on the proof
-            // Note: We don't have the proof object anymore here; reparse to inspect widths
-            if let Ok(proof2) = Proof::from_bytes(proof_bytes) {
-                let ti = proof2.trace_info();
-                eprintln!(
-                    "[VERIFY/TRACE-INFO] multi_segment={} main_width={} aux_width={} length={}",
-                    ti.is_multi_segment(),
-                    ti.main_trace_width(),
-                    ti.aux_segment_width(),
-                    ti.length()
-                );
-            }
+        Err(_e) => {
+            eprintln!("Winterfell verification failed: {:?}", _e);
             Ok(false)
         }
     }

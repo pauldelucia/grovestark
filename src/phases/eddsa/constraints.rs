@@ -20,8 +20,9 @@ pub fn evaluate_eddsa_constraints<E: FieldElement<BaseField = BaseElement>>(
     // Use the provided EdDSA mask instead of reading from trace
     let eddsa_active = eddsa_mask;
 
-    // NOTE: This function returns exactly 50 scalar range-check constraints
-    // The 16 XY-TZ constraints and any window bit constraints are handled elsewhere
+    // NOTE: This function returns exactly 64 scalar range-check constraints
+    // (32 for S + 32 for H)
+    // The XY-TZ constraints and window bit constraints are handled elsewhere
 
     // Scalar range checks using auxiliary trace columns
     // These enforce s < L and h < L using borrow chains
@@ -91,10 +92,8 @@ pub fn evaluate_eddsa_constraints<E: FieldElement<BaseField = BaseElement>>(
         constraint_idx += 1;
     }
 
-    // H scalar range check constraints: h < L
-    // Only do 9 limbs to get exactly 50 total constraints
-    // (32 for S + 18 for H = 50)
-    for i in 0..9 {
+    // H scalar range check constraints: h < L (all 16 limbs)
+    for i in 0..16 {
         let h_i = current[H_SCALAR_COLS[i]];
 
         // Use absolute indices directly from current
