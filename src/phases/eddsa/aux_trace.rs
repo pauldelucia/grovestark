@@ -152,48 +152,12 @@ pub fn fill_eddsa_phase_with_aux(
         h_bytes[i * 2 + 1] = ((h_scalar[i] >> 8) & 0xFF) as u8;
     }
 
-    // Debug logging only in debug builds
-    #[cfg(debug_assertions)]
-    {
-        println!("🔍 STARK trace EdDSA computation:");
-        println!("  s_bytes: {:02x?}...", &s_bytes[..8]);
-        println!("  h_bytes: {:02x?}...", &h_bytes[..8]);
-        println!(
-            "  r_ext: x[0]={}, y[0]={}, z[0]={}, t[0]={}",
-            r_ext.x[0], r_ext.y[0], r_ext.z[0], r_ext.t[0]
-        );
-        println!(
-            "  a_ext: x[0]={}, y[0]={}, z[0]={}, t[0]={}",
-            a_ext.x[0], a_ext.y[0], a_ext.z[0], a_ext.t[0]
-        );
-        println!(
-            "  base_ext: x[0]={}, y[0]={}, z[0]={}, t[0]={}",
-            base_ext.x[0], base_ext.y[0], base_ext.z[0], base_ext.t[0]
-        );
-    }
-
     // Use the correct scalar multiplication
     let final_ext =
         scalar_mult_correct::eddsa_verify_combine(&s_bytes, &h_bytes, &r_ext, &a_ext, &base_ext);
 
     // Convert back to ExtendedPoint format
     let cofactor_result = scalar_mult_correct::convert_to_extended(&final_ext);
-
-    #[cfg(debug_assertions)]
-    {
-        println!(
-            "  final_ext: x[0]={}, y[0]={}, z[0]={}, t[0]={}",
-            final_ext.x[0], final_ext.y[0], final_ext.z[0], final_ext.t[0]
-        );
-        println!(
-            "  cofactor_result: x[0]={}, y[0]={}, z[0]={}, t[0]={}",
-            cofactor_result.x[0], cofactor_result.y[0], cofactor_result.z[0], cofactor_result.t[0]
-        );
-        println!(
-            "  is_identity: {}",
-            is_identity_projective(&cofactor_result)
-        );
-    }
 
     let mut current_row = start_row;
 

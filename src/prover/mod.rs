@@ -42,23 +42,17 @@ impl GroveSTARK {
         // We'll store them directly in our STARKProof structure
         // The actual commitments and FRI data are embedded in the proof bytes
 
-        // Log proof size for debugging
-        #[cfg(debug_assertions)]
-        eprintln!("Generated proof size: {} bytes", proof_bytes.len());
-
         // Extract metadata from the winterfell proof for our STARKProof structure
         // The complete proof is stored in proof_bytes for verification
         let trace_commitment = if proof_bytes.len() >= 32 {
             proof_bytes[0..32].to_vec()
         } else {
-            eprintln!("WARNING: Proof too small for trace commitment extraction");
             vec![0u8; 32]
         };
 
         let constraint_commitment = if proof_bytes.len() >= 64 {
             proof_bytes[32..64].to_vec()
         } else {
-            eprintln!("WARNING: Proof too small for constraint commitment extraction");
             vec![0u8; 32]
         };
 

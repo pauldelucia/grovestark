@@ -110,28 +110,6 @@ impl DocumentVerifier {
         Ok(hash_bytes)
     }
 
-    /// Verify key Merkle path
-    #[allow(dead_code)]
-    fn verify_key_path(
-        private_key: &[u8; 32],
-        path: &[crate::types::MerkleNode],
-        expected_root: &[u8; 32],
-    ) -> Result<bool> {
-        // Hash the private key
-        let key_hash_result = blake3_hash(private_key);
-        let mut key_hash = [0u8; 32];
-        for i in 0..8 {
-            let bytes = key_hash_result[i].to_le_bytes();
-            key_hash[i * 4..(i + 1) * 4].copy_from_slice(&bytes);
-        }
-
-        // Convert path to tuples
-        let path_tuples: Vec<(bool, [u8; 32])> =
-            path.iter().map(|node| (node.is_left, node.hash)).collect();
-
-        Ok(verify_merkle_path(&key_hash, &path_tuples, expected_root))
-    }
-
     /// Compute document fingerprint for public verification
     fn compute_fingerprint(
         doc_hash: &[u8; 32],
