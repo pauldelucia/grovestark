@@ -35,7 +35,6 @@ pub mod air;
 pub mod crypto;
 pub mod ed25519_helpers;
 pub mod error;
-pub mod error_handling;
 pub mod field;
 pub mod layout;
 pub mod parser;

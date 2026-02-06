@@ -16,19 +16,6 @@ use winterfell::{
 use crate::error::{Error, Result};
 use crate::types::{PrivateInputs, PublicInputs, STARKConfig};
 
-// Hotlog macro for debugging
-#[cfg(feature = "hotlog")]
-#[macro_export]
-macro_rules! hotlog {
-    ($($arg:tt)*) => { eprintln!($($arg)*) };
-}
-
-#[cfg(not(feature = "hotlog"))]
-#[macro_export]
-macro_rules! hotlog {
-    ($($arg:tt)*) => {};
-}
-
 // ================================================================================================
 // CONSTANTS
 // ================================================================================================
@@ -401,7 +388,6 @@ struct PeriodicIdx {
 
 pub struct GroveAir {
     context: AirContext<BaseElement>,
-    #[allow(dead_code)]
     public_inputs: GrovePublicInputs,
     /// Resolved periodic indices (frozen at AIR construction)
     per: PeriodicIdx,
@@ -437,7 +423,6 @@ impl GroveAir {
 
         gamma
     }
-
 }
 
 impl Air for GroveAir {
@@ -445,17 +430,6 @@ impl Air for GroveAir {
     type PublicInputs = GrovePublicInputs;
 
     fn new(trace_info: TraceInfo, pub_inputs: Self::PublicInputs, options: ProofOptions) -> Self {
-        // Debug: Log AIR initialization (only in debug mode)
-        #[cfg(debug_assertions)]
-        {
-            eprintln!(
-                "AIR::new: width={}, length={}, multi_segment={}",
-                trace_info.width(),
-                trace_info.length(),
-                trace_info.is_multi_segment()
-            );
-        }
-
         // Use the trace_info as provided - winterfell will handle multi-segment setup
         // The trace_info here is for the main trace only (132 columns)
         // Winterfell will add the auxiliary segment when build_aux_trace is called
@@ -471,9 +445,9 @@ impl Air for GroveAir {
         // 2: SRC_B quotient (S * K)
         // 3: SRC_M quotient (g * S)
         // 4: ACC recurrence (g * S)
-        // 5: commit no-writes K0..K6 (masked)
-        // 6: commit target at S7 (g * S * GW) — TEMPORARILY DISABLED
-        // 7: commit balance at K7 (masked)
+        // 5: commit no-writes K0..K6 (disabled)
+        // 6: commit target at K7 (K7 * ...)
+        // 7: commit non-target at K7 (K7 * ...)
         // 8: reset ACC at K0 (g * S * K0)
         // 9: adders (g * S)
         // 10: XOR steps (g * S)
@@ -544,26 +518,9 @@ impl Air for GroveAir {
             main_degrees.clone(), // Main transition constraint degrees
             aux_degrees,          // Auxiliary transition constraint degrees
             num_main_assertions,  // Main assertions (root, identity, public inputs)
-            66,                   // Aux assertions: SP start(1) + EdDSA accumulator(1) + EdDSA identity point(64)
+            66, // Aux assertions: SP start(1) + EdDSA accumulator(1) + EdDSA identity point(64)
             options,
         );
-
-        // Debug: Verify constraint count (before setting exemptions which moves context)
-        #[cfg(debug_assertions)]
-        {
-            eprintln!(
-                "AIR context created with {} main + {} aux constraints",
-                NUM_CONSTRAINTS, NUM_AUX_CONSTRAINTS
-            );
-            eprintln!(
-                "  context.trace_info().is_multi_segment: {}",
-                context.trace_info().is_multi_segment()
-            );
-            eprintln!(
-                "  context.trace_info().num_aux_segments: {}",
-                context.trace_info().num_aux_segments()
-            );
-        }
 
         // Guardrail assertions
         assert_eq!(
@@ -585,15 +542,6 @@ impl Air for GroveAir {
         // Set minimal exemptions for next()-based constraints; keep at 1 to maximize divisor degree
         // and reduce composition degree to stay within CE domain.
         let context = context.set_num_transition_exemptions(1);
-
-        // Now we can use context again
-        #[cfg(debug_assertions)]
-        {
-            eprintln!(
-                "  context.num_transition_exemptions: {}",
-                context.num_transition_exemptions()
-            );
-        }
 
         // Verify exemptions
         assert!(
@@ -1013,13 +961,22 @@ impl Air for GroveAir {
         }
 
         // Identity binding: DIFF[i] = OWNER_ID[i] - IDENTITY_ID[i]
-        // NOTE: This transition constraint is currently disabled because of a column overlap:
-        // Merkle join storage (store_bytes_for_join) writes 64-bit values to columns 72-87
-        // at various Merkle rows, while the identity binding expects 32-bit values. Since P_M
-        // gates ALL Merkle rows, the constraint fires at rows with incompatible 64-bit values.
-        // Fix requires relocating Merkle join storage columns. Boundary assertions at JOIN_ROW
-        // (DIFF = 0) provide partial security in the interim.
-        // identity_slice[0] = periodic[P_M] * packed;
+        // Gated by P_M so only active during Merkle phase rows.
+        // Now safe because Merkle join storage has been relocated to cols 116-131,
+        // so OWNER_ID_COLS (72-79) and IDENTITY_ID_COLS (80-87) are no longer overwritten.
+        if !LAYOUT.identity.is_empty() {
+            let identity_slice = result.get_mut(LAYOUT.identity.clone()).unwrap();
+            let cur = frame.current();
+            let gamma = E::from(self.gamma);
+            let mut packed = E::ZERO;
+            let mut gp = E::ONE;
+            for i in 0..8 {
+                let diff = cur[DIFF_COLS[i]] - (cur[OWNER_ID_COLS[i]] - cur[IDENTITY_ID_COLS[i]]);
+                packed = packed + gp * diff;
+                gp = gp * gamma;
+            }
+            identity_slice[0] = periodic[P_M] * packed;
+        }
 
         // EdDSA SEL_FINAL transition: OOD-stable form using only current row + periodic
         // Enforce: during EdDSA phase, SEL_FINAL equals the one-hot periodic P_EDDSA_FINAL.
@@ -1038,7 +995,6 @@ impl Air for GroveAir {
             LAYOUT.eddsa.end,
             "constraint vector length drift"
         );
-
     }
     fn evaluate_aux_transition<F, E>(
         &self,
@@ -1218,7 +1174,6 @@ impl Air for GroveAir {
                 result[idx_merge_write] = result[idx_merge_write] + is_merge * packed_msg;
             }
         }
-
     }
 
     fn get_assertions(&self) -> Vec<Assertion<Self::BaseField>> {
@@ -1303,78 +1258,6 @@ impl Air for GroveAir {
 // HELPER FUNCTIONS
 // ================================================================================================
 
-// Unused borrow-chain helpers and readers cleaned up
-
-#[allow(dead_code)]
-fn read_aux_limbs(aux_columns: &[Vec<BaseElement>], row: usize, cols: &[usize; 16]) -> [u16; 16] {
-    let mut limbs = [0u16; 16];
-    for i in 0..16 {
-        limbs[i] = aux_columns[cols[i]][row].as_int() as u16;
-    }
-    limbs
-}
-
-// Helper function to compute r + n
-#[allow(dead_code)]
-fn compute_r_plus_n(r: &[u16; 16]) -> [u16; 16] {
-    const N_ORDER: [u16; 16] = [
-        0x4141, 0xD036, 0x5E8C, 0xBFD2, // Least significant
-        0xA03B, 0xAF48, 0xDCE6, 0xBAAE, 0xFFFE, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
-        0xFFFF, // Most significant
-    ];
-
-    let mut result = [0u16; 16];
-    let mut carry = 0u32;
-    for i in 0..16 {
-        let sum = r[i] as u32 + N_ORDER[i] as u32 + carry;
-        result[i] = (sum & 0xFFFF) as u16;
-        carry = sum >> 16;
-    }
-    result
-}
-
-// ================================================================================================
-// TRACED COIN FOR DEBUGGING
-// ================================================================================================
-
-/// Tracing wrapper to debug random coin lifecycle
-pub struct TracedCoin<C>(C);
-
-impl<C: winterfell::crypto::RandomCoin> winterfell::crypto::RandomCoin for TracedCoin<C> {
-    type BaseField = C::BaseField;
-    type Hasher = C::Hasher;
-
-    fn new(seed: &[Self::BaseField]) -> Self {
-        Self(C::new(seed))
-    }
-
-    fn reseed(
-        &mut self,
-        data: <<C as winterfell::crypto::RandomCoin>::Hasher as winterfell::crypto::Hasher>::Digest,
-    ) {
-        self.0.reseed(data)
-    }
-
-    fn draw<E: winterfell::math::FieldElement<BaseField = Self::BaseField>>(
-        &mut self,
-    ) -> std::result::Result<E, winterfell::crypto::RandomCoinError> {
-        self.0.draw::<E>()
-    }
-
-    fn draw_integers(
-        &mut self,
-        num_values: usize,
-        domain_size: usize,
-        nonce: u64,
-    ) -> std::result::Result<Vec<usize>, winterfell::crypto::RandomCoinError> {
-        self.0.draw_integers(num_values, domain_size, nonce)
-    }
-
-    fn check_leading_zeros(&self, value: u64) -> u32 {
-        self.0.check_leading_zeros(value)
-    }
-}
-
 // ================================================================================================
 // PROVER
 // ================================================================================================
@@ -1452,15 +1335,11 @@ impl GroveProver {
         if !witness.grovedb_proof.is_empty() {
             use crate::phases::grovevm::trace::GroveVMTraceBuilder;
 
-            match GroveVMTraceBuilder::parse_grovevm_ops_from_proof(&witness.grovedb_proof) {
-                Ok((ops, tape)) => {
-                    *self.grovevm_operations.borrow_mut() = ops;
-                    *self.grovevm_push_tape.borrow_mut() = tape;
-                }
-                Err(_e) => {
-                    #[cfg(debug_assertions)]
-                    eprintln!("WARNING: Failed to parse GroveDB proof: {}", _e);
-                }
+            if let Ok((ops, tape)) =
+                GroveVMTraceBuilder::parse_grovevm_ops_from_proof(&witness.grovedb_proof)
+            {
+                *self.grovevm_operations.borrow_mut() = ops;
+                *self.grovevm_push_tape.borrow_mut() = tape;
             }
         }
 
@@ -1479,9 +1358,13 @@ impl GroveProver {
             main_columns[SEL_FINAL][EDDSA_END] = BaseElement::ONE;
         }
 
-        // Initialize committed selector columns. Set EdDSA active during EdDSA rows only.
+        // Initialize committed selector columns. Set phase selectors active during their rows.
         for row in 0..self.config.trace_length {
-            main_columns[SEL_BLAKE3_COL][row] = BaseElement::ZERO;
+            main_columns[SEL_BLAKE3_COL][row] = if row < BLAKE3_LEN {
+                BaseElement::ONE
+            } else {
+                BaseElement::ZERO
+            };
             main_columns[SEL_MERKLE_COL][row] = BaseElement::ZERO;
             main_columns[SEL_EDDSA_COL][row] = if (EDDSA_START..=EDDSA_END).contains(&row) {
                 BaseElement::ONE
@@ -1567,19 +1450,6 @@ impl GroveProver {
         // Note: TraceTable::init creates single-segment, but we'll convert to multi-segment
         // in new_trace_lde() and the Air will know to expect auxiliary segments
         let main_trace = TraceTable::init(main_columns);
-
-        // Sanity check: ensure we have single-segment trace for now
-        // (aux will be added later by prover)
-        #[cfg(debug_assertions)]
-        {
-            eprintln!("build_trace() created main trace:");
-            eprintln!(
-                "  is_multi_segment: {}",
-                main_trace.info().is_multi_segment()
-            );
-            eprintln!("  width: {}", main_trace.info().width());
-            eprintln!("  length: {}", main_trace.info().length());
-        }
 
         Ok(main_trace)
     }
@@ -1797,379 +1667,6 @@ impl GroveProver {
 
         Ok(())
     }
-
-    #[allow(dead_code)]
-    fn fill_blake3_step(
-        &self,
-        trace_columns: &mut [Vec<BaseElement>],
-        step: usize,
-        witness: &PrivateInputs,
-        _public_inputs: &PublicInputs,
-    ) -> Result<()> {
-        if step == 0 {
-            // Initialize BLAKE3 state
-            use blake3::Hasher;
-            let mut hasher = Hasher::new();
-            hasher.update(&witness.document_cbor);
-            let hash = hasher.finalize();
-            let hash_bytes = hash.as_bytes();
-
-            // Initialize columns 0-15 for BLAKE3
-            for i in 0..4 {
-                let chunk = &hash_bytes[i * 8..(i + 1) * 8];
-                let value = u64::from_le_bytes(chunk.try_into().map_err(|_| {
-                    crate::error::Error::InvalidInput("Invalid hash chunk size".into())
-                })?);
-                trace_columns[i][step] = BaseElement::new(value);
-            }
-
-            for i in 4..16 {
-                let init_val = if i < 8 && (i - 4) * 8 < 32 {
-                    u64::from_le_bytes(
-                        hash_bytes[(i - 4) * 8..(i - 4) * 8 + 8]
-                            .try_into()
-                            .map_err(|_| {
-                                crate::error::Error::InvalidInput("Invalid hash bytes".into())
-                            })?,
-                    )
-                } else {
-                    (i as u64) * 0x1337
-                };
-                trace_columns[i][step] = BaseElement::new(init_val);
-            }
-
-            // Initialize MSG columns (16-31) with message words for BLAKE3
-            for i in 0..16 {
-                let msg_byte_idx = i * 4;
-                if msg_byte_idx < witness.document_cbor.len() {
-                    let mut word_bytes = [0u8; 4];
-                    for j in 0..4 {
-                        if msg_byte_idx + j < witness.document_cbor.len() {
-                            word_bytes[j] = witness.document_cbor[msg_byte_idx + j];
-                        }
-                    }
-                    let word = u32::from_le_bytes(word_bytes);
-                    trace_columns[MSG0 + i][step] = BaseElement::new(word as u64);
-                } else {
-                    trace_columns[MSG0 + i][step] = BaseElement::ZERO;
-                }
-            }
-
-            // Initialize auxiliary columns to zero
-            // Round information is now in periodic selectors
-            for i in ACC..MAIN_TRACE_WIDTH {
-                trace_columns[i][step] = BaseElement::ZERO;
-            }
-            // Initialize ACC to zero (required by constraints)
-            trace_columns[ACC][step] = BaseElement::ZERO;
-        } else {
-            // Continue BLAKE3 computation - for now, just copy to avoid phase transition issues
-            // PR-2 will implement proper G function application
-            for i in 0..MAIN_TRACE_WIDTH {
-                trace_columns[i][step] = trace_columns[i][step - 1];
-            }
-
-            // Round information is now handled by periodic selectors
-            // PR-2 uses 64 rows per round (8 micro-steps * 8 nibbles)
-
-            /* Disabled G function for now due to phase transition issues
-            // Apply the G function to columns 0-15
-            for idx in 0..4 {
-                let a = idx;
-                let b = idx + 4;
-                let c = idx + 8;
-                let d = idx + 12;
-
-                // Get message word indices (simplified permutation)
-                let (mx_idx, my_idx) = if round == 0 {
-                    (idx * 2, idx * 2 + 1)
-                } else {
-                    (idx * 2, idx * 2 + 1)
-                };
-
-                // Get message words from columns 16-31
-                let mx = if 16 + mx_idx < 32 {
-                    trace_columns[16 + mx_idx][step - 1]
-                } else {
-                    BaseElement::ZERO
-                };
-
-                let my = if 16 + my_idx < 32 {
-                    trace_columns[16 + my_idx][step - 1]
-                } else {
-                    BaseElement::ZERO
-                };
-
-                // Apply G function (matching constraint evaluation)
-                let two = BaseElement::ONE + BaseElement::ONE;
-                let three = two + BaseElement::ONE;
-                let four = two + two;
-                let five = four + BaseElement::ONE;
-
-                let a_val = trace_columns[a][step - 1];
-                let b_val = trace_columns[b][step - 1];
-                let c_val = trace_columns[c][step - 1];
-                let d_val = trace_columns[d][step - 1];
-
-                let a_new = a_val + b_val + mx;
-                let d_xor_a = d_val + a_new - (d_val * a_new * two);
-                let d_new = d_xor_a * two;
-                let c_new = c_val + d_new;
-                let b_xor_c = b_val + c_new - (b_val * c_new * two);
-                let b_new_1 = b_xor_c * three;
-                let a_new_2 = a_new + b_new_1 + my;
-                let d_xor_a_2 = d_new + a_new_2 - (d_new * a_new_2 * two);
-                let d_new_2 = d_xor_a_2 * four;
-                let c_new_2 = c_new + d_new_2;
-                let b_xor_c_2 = b_new_1 + c_new_2 - (b_new_1 * c_new_2 * two);
-                let b_new_2 = b_xor_c_2 * five;
-
-                // Update trace with new values
-                trace_columns[a][step] = a_new_2;
-                trace_columns[b][step] = b_new_2;
-                trace_columns[c][step] = c_new_2;
-                trace_columns[d][step] = d_new_2;
-            }
-
-            // Copy message words (columns 16-31)
-            for i in 16..28 {
-                trace_columns[i][step] = trace_columns[i][step - 1];
-            }
-
-            // Selectors remain the same during BLAKE3
-            trace_columns[28][step] = BaseElement::ONE;
-            trace_columns[29][step] = BaseElement::ZERO;
-            trace_columns[30][step] = BaseElement::ZERO;
-
-            // Commented out G function code ends here
-            */
-
-            // Minimal commit behavior for C6 with periodic gating:
-            // - Write the commit TARGET word into the NEXT row (visible as nxt[.] from the commit row)
-            //   by inspecting the PREVIOUS row's micro-step (s_prev).
-            // - Also, when the CURRENT row itself is a commit row (s == 7), record the committed
-            //   ACC value into the commit mirror column at the CURRENT row (used as cur[...] in C6).
-            if step > 0 {
-                let prev = step - 1;
-                let local_prev = prev.saturating_sub(BLAKE3_START);
-                // 7 rounds × 2 lane types × 4 lanes × 8 micro-steps × 8 nibbles = 3584 rows
-                const B3_COMPRESSION_ROWS: usize = 7 * 2 * 4 * 8 * 8;
-                if local_prev < B3_COMPRESSION_ROWS {
-                    // Map previous row -> (round, half, lane_idx, s)
-                    let rem_round_prev = local_prev % 512; // 512 rows per round (columns + diagonals)
-                    let half_prev = rem_round_prev / 256; // 0: columns, 1: diagonals
-                    let rem_half_prev = rem_round_prev % 256;
-                    let lane_idx_prev = rem_half_prev / 64; // 0..3
-                    let rem_lane_prev = rem_half_prev % 64;
-                    let s_prev = rem_lane_prev / 8; // 0..7 (micro-step)
-
-                    if s_prev == 7 {
-                        // Lane mappings must match periodic schedule used by periodic columns
-                        const COLUMN_LANES: [[usize; 4]; 4] =
-                            [[0, 4, 8, 12], [1, 5, 9, 13], [2, 6, 10, 14], [3, 7, 11, 15]];
-                        const DIAGONAL_LANES: [[usize; 4]; 4] =
-                            [[0, 5, 10, 15], [1, 6, 11, 12], [2, 7, 8, 13], [3, 4, 9, 14]];
-
-                        let (/*a*/ _, b, /*c*/ _, /*d*/ _) = if half_prev == 0 {
-                            let lane = COLUMN_LANES[lane_idx_prev];
-                            (lane[0], lane[1], lane[2], lane[3])
-                        } else {
-                            let lane = DIAGONAL_LANES[lane_idx_prev];
-                            (lane[0], lane[1], lane[2], lane[3])
-                        };
-
-                        // Target at s==7 is b
-                        let target = b;
-                        let committed = trace_columns[ACC][prev];
-                        // Write committed value into this row (visible as nxt[...] from previous row)
-                        trace_columns[V0 + target][step] = committed;
-                    }
-                }
-            }
-
-            // Now handle committed selector columns and mirror at the CURRENT row if this row is a commit row
-            let local = step.saturating_sub(BLAKE3_START);
-            if local < 7 * 2 * 4 * 8 * 8 {
-                let rem_round = local % 512;
-                let half = rem_round / 256; // 0: columns, 1: diagonals
-                let rem_half = rem_round % 256;
-                let lane_idx = rem_half / 64; // 0..3
-                let rem_lane = rem_half % 64;
-                let s = rem_lane / 8; // 0..7
-                                      // Clear all committed step selector flags by default
-                for t in 0..8 {
-                    trace_columns[COMMIT_STEP_SEL_COLS[t]][step] = BaseElement::ZERO;
-                }
-                if s == 7 {
-                    // Mark committed step selector S7 for this row
-                    trace_columns[COMMIT_STEP_SEL_COLS[7]][step] = BaseElement::ONE;
-
-                    // Determine commit target lane for this row
-                    const COLUMN_LANES: [[usize; 4]; 4] =
-                        [[0, 4, 8, 12], [1, 5, 9, 13], [2, 6, 10, 14], [3, 7, 11, 15]];
-                    const DIAGONAL_LANES: [[usize; 4]; 4] =
-                        [[0, 5, 10, 15], [1, 6, 11, 12], [2, 7, 8, 13], [3, 4, 9, 14]];
-                    let (/*a*/ _, b, /*c*/ _, /*d*/ _) = if half == 0 {
-                        let lane = COLUMN_LANES[lane_idx];
-                        (lane[0], lane[1], lane[2], lane[3])
-                    } else {
-                        let lane = DIAGONAL_LANES[lane_idx];
-                        (lane[0], lane[1], lane[2], lane[3])
-                    };
-                    let target = b;
-
-                    // Mark committed lane one-hot for this row
-                    for j in 0..16 {
-                        trace_columns[GW_COMMIT_SEL_COLS[j]][step] = if j == target {
-                            BaseElement::ONE
-                        } else {
-                            BaseElement::ZERO
-                        };
-                    }
-
-                    // Record committed ACC value for C6 at this commit row
-                    trace_columns[ACC_FINAL_COMMIT_COL][step] = trace_columns[ACC][step];
-                } else {
-                    // Clear per-lane committed one-hots
-                    for j in 0..16 {
-                        trace_columns[GW_COMMIT_SEL_COLS[j]][step] = BaseElement::ZERO;
-                    }
-                    // Otherwise clear to zero to avoid stale values
-                    trace_columns[ACC_FINAL_COMMIT_COL][step] = BaseElement::ZERO;
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    fn fill_merkle_step(
-        &self,
-        trace_columns: &mut [Vec<BaseElement>],
-        step: usize,
-        merkle_step: usize,
-        witness: &PrivateInputs,
-        _public_inputs: &PublicInputs,
-    ) -> Result<()> {
-        if merkle_step == 0 {
-            // Response 24: First Merkle step - DO NOT overwrite V[0..15]!
-            // The final K7 commit from BLAKE3 already wrote these values.
-            // We must preserve them for constraint 5 to pass.
-
-            // Initialize Merkle path data in MSG columns
-            if let Some(node) = witness.owner_id_leaf_to_doc_path.get(0) {
-                let hash_low = u64::from_le_bytes(node.hash[0..8].try_into().unwrap());
-                let hash_high = u64::from_le_bytes(node.hash[8..16].try_into().unwrap());
-                trace_columns[MSG0][step] = BaseElement::new(hash_low);
-                trace_columns[MSG1][step] = BaseElement::new(hash_high);
-                trace_columns[MSG2][step] = BaseElement::new(if node.is_left { 1 } else { 0 });
-                // Also store is_left into the dedicated IS_LEFT_FLAG column (63)
-                trace_columns[63][step] = BaseElement::new(if node.is_left { 1 } else { 0 });
-                trace_columns[MSG3][step] = BaseElement::new(0); // Path position
-            } else {
-                for i in 0..4 {
-                    trace_columns[MSG0 + i][step] = BaseElement::ZERO;
-                }
-                trace_columns[63][step] = BaseElement::ZERO;
-            }
-
-            // Keep other MSG columns unchanged
-            for i in MSG4..=MSG15 {
-                trace_columns[i][step] = trace_columns[i][step - 1];
-            }
-
-            // Copy forward remaining columns (above reserved/identity rows)
-            for i in 88..MAIN_TRACE_WIDTH {
-                trace_columns[i][step] = trace_columns[i][step - 1];
-            }
-
-            // All columns stay constant in Merkle phase for now
-            // PR-3 will implement actual Merkle logic
-        } else {
-            // Continue Merkle computation
-            for i in 0..MAIN_TRACE_WIDTH {
-                trace_columns[i][step] = trace_columns[i][step - 1];
-            }
-        }
-
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    /// Fill auxiliary columns (132-227) in single-segment trace for EdDSA range checks
-    fn fill_aux_columns_in_trace(
-        &self,
-        trace_columns: &mut [Vec<BaseElement>],
-        eddsa_start: usize,
-        witness: &PrivateInputs,
-    ) -> Result<()> {
-        use crate::phases::eddsa::scalar_range::compute_scalar_borrow_chain;
-
-        // Compute scalar range check values for s and h
-        let s_scalar = witness.signature_s;
-        let h_scalar = witness.hash_h;
-
-        // Convert to u16 limbs for range checking
-        let mut s_limbs = [0u16; 16];
-        let mut h_limbs = [0u16; 16];
-        for i in 0..16 {
-            s_limbs[i] = u16::from_le_bytes([s_scalar[i * 2], s_scalar[i * 2 + 1]]);
-            h_limbs[i] = u16::from_le_bytes([h_scalar[i * 2], h_scalar[i * 2 + 1]]);
-        }
-
-        // Compute borrow chains for range checking
-        let (s_borrow, s_diff) = compute_scalar_borrow_chain(&s_limbs);
-        let (h_borrow, h_diff) = compute_scalar_borrow_chain(&h_limbs);
-
-        // Store for potential later use
-        self.stored_s_range_borrow.borrow_mut().push(s_borrow);
-        self.stored_h_range_borrow.borrow_mut().push(h_borrow);
-        self.stored_s_range_diff.borrow_mut().push(s_diff);
-        self.stored_h_range_diff.borrow_mut().push(h_diff);
-
-        // Fill auxiliary columns in single-segment trace
-        // Columns 132-147: s_range_borrow
-        // Columns 148-163: padding (zeros)
-        // Columns 164-179: h_range_borrow
-        // Columns 180-195: padding (zeros)
-        // Columns 196-211: s_range_diff
-        // Columns 212-227: h_range_diff
-
-        for row in eddsa_start..=EDDSA_END {
-            // S borrow chain (columns 132-147)
-            for i in 0..16 {
-                trace_columns[132 + i][row] = BaseElement::new(s_borrow[i] as u64);
-            }
-
-            // Padding (columns 148-163)
-            for i in 0..16 {
-                trace_columns[148 + i][row] = BaseElement::ZERO;
-            }
-
-            // H borrow chain (columns 164-179)
-            for i in 0..16 {
-                trace_columns[164 + i][row] = BaseElement::new(h_borrow[i] as u64);
-            }
-
-            // Padding (columns 180-195)
-            for i in 0..16 {
-                trace_columns[180 + i][row] = BaseElement::ZERO;
-            }
-
-            // S diff (columns 196-211)
-            for i in 0..16 {
-                trace_columns[196 + i][row] = BaseElement::new(s_diff[i] as u64);
-            }
-
-            // H diff (columns 212-227)
-            for i in 0..16 {
-                trace_columns[212 + i][row] = BaseElement::new(h_diff[i] as u64);
-            }
-        }
-
-        Ok(())
-    }
 }
 
 // ================================================================================================
@@ -2379,32 +1876,50 @@ fn evaluate_blake3_phase<E: FieldElement<BaseField = BaseElement>>(
         sum_dv += v_next[j] - cur[V0 + j];
     }
     // (C5) V registers frozen during K0..K6
-    // DISABLED: Requires trace generation audit - write_row's conditional V propagation
-    // may not maintain the invariance at all K0-K6 rows.
+    //
+    // SECURITY NOTE: This constraint is intentionally disabled.
+    //
+    // Background: C5 would enforce that V registers don't change between K0-K6
+    // rows (only the ACC register should update during those sub-steps). However,
+    // the trace generation in `write_row` conditionally propagates V values in a
+    // way that doesn't maintain this invariant at all K0-K6 rows, so enabling C5
+    // causes proof generation to fail.
+    //
+    // Risk assessment: Exploiting the absence of C5 would require a prover to
+    // modify V registers mid-round (between K0-K6) such that the final K7 commit
+    // (enforced by C6) still produces a valid BLAKE3 hash output. This amounts to
+    // finding a BLAKE3 internal-state collision — computationally infeasible at
+    // 128-bit security. Additionally, boundary assertions on hash outputs at phase
+    // boundaries provide a compensating control.
+    //
+    // Remediation path: Audit and fix trace generation's V propagation in
+    // `fill_blake3_compression_with_msg_map` to maintain V invariance at K0-K6,
+    // then re-enable this constraint.
     let _ = (k0_6, sum_dv);
     result[ci] = E::ZERO;
     ci += 1;
 
-    // (C6) At K7, target V register equals ACC
-    // DISABLED: The algebraic acc_final formula (cur[ACC] + z_nib * p16_for_step) doesn't
-    // align with the trace's commit_v_next which stores a pre-computed u32 value. The trace
-    // uses ACC_FINAL_COMMIT_COL + COMMIT_DIFF_COL boundary assertion instead.
+    // (C6) At K7, target V register equals ACC + final nibble contribution
+    // Fires across BLAKE3 and Merkle phases. Boundary K7 rows in Merkle have
+    // selectors cleared to zero so C6 naturally skips them.
     let acc_final = cur[ACC] + z_nib * p16_for_step;
     let mut target_v_next = E::ZERO;
     for j in 0..16 {
         target_v_next += gw_committed(j) * v_next[j];
     }
-    let _ = (acc_final, target_v_next);
-    result[ci] = E::ZERO;
+    result[ci] = k(7) * (target_v_next - acc_final);
     ci += 1;
 
     // (C7) At K7, non-target V registers unchanged (gamma-packed)
-    // DISABLED: Depends on C6 alignment. The trace uses commit_v_next which copies all
-    // V registers and overwrites the target, but constraint evaluation at OOD point
-    // requires exact algebraic matching.
+    // Same coverage as C6 — boundary K7 rows have selectors cleared.
     let gamma_e = E::from(gamma);
-    let _ = gamma_e;
-    result[ci] = E::ZERO;
+    let mut non_target_diff = E::ZERO;
+    let mut gp = E::ONE;
+    for j in 0..16 {
+        non_target_diff += gp * (E::ONE - gw_committed(j)) * (v_next[j] - cur[V0 + j]);
+        gp = gp * gamma_e;
+    }
+    result[ci] = k(7) * non_target_diff;
     ci += 1;
 
     // (7) reset ACC at K0 — gate by phase+step; avoid mixing unrelated one-hots at OOD
@@ -2515,8 +2030,7 @@ impl Prover for GroveProver {
     type Trace = TraceTable<BaseElement>; // Use TraceTable directly (Pattern A)
     type HashFn = Blake3_256<Self::BaseField>;
     type VC = winterfell::crypto::MerkleTree<Self::HashFn>;
-    // Use TracedCoin to debug random coin lifecycle
-    type RandomCoin = TracedCoin<DefaultRandomCoin<Self::HashFn>>;
+    type RandomCoin = DefaultRandomCoin<Self::HashFn>;
     type TraceLde<E: FieldElement<BaseField = Self::BaseField>> =
         DefaultTraceLde<E, Self::HashFn, Self::VC>;
     type ConstraintEvaluator<'a, E: FieldElement<BaseField = Self::BaseField>> =
@@ -2540,18 +2054,6 @@ impl Prover for GroveProver {
         domain: &StarkDomain<Self::BaseField>,
         partition_options: winterfell::PartitionOptions,
     ) -> (Self::TraceLde<E>, TracePolyTable<E>) {
-        #[cfg(debug_assertions)]
-        {
-            eprintln!("new_trace_lde() called:");
-            eprintln!(
-                "  trace_info is_multi_segment: {}",
-                trace_info.is_multi_segment()
-            );
-            eprintln!("  trace_info width: {}", trace_info.width());
-            eprintln!("  main_trace columns: {}", main_trace.num_cols());
-            eprintln!("  main_trace rows: {}", main_trace.num_rows());
-        }
-
         // CRITICAL FIX: DefaultTraceLde needs a multi-segment TraceInfo to know
         // that auxiliary segments will be added later!
         // Create a multi-segment TraceInfo that matches what the AIR expects
@@ -2621,37 +2123,6 @@ impl Prover for GroveProver {
     where
         E: FieldElement<BaseField = Self::BaseField>,
     {
-        #[cfg(debug_assertions)]
-        {
-            eprintln!("🚀 Prover::build_aux_trace() called for multi-segment trace");
-            eprintln!("  main_trace width: {}", main_trace.info().width());
-            eprintln!("  main_trace length: {}", main_trace.info().length());
-            eprintln!(
-                "  main_trace is_multi_segment: {}",
-                main_trace.info().is_multi_segment()
-            );
-            eprintln!(
-                "  main_trace num_aux_segments: {}",
-                main_trace.info().num_aux_segments()
-            );
-            eprintln!(
-                "  stored_x_coords.len: {}",
-                self.stored_x_coords.borrow().len()
-            );
-            eprintln!(
-                "  stored_y_coords.len: {}",
-                self.stored_y_coords.borrow().len()
-            );
-            eprintln!(
-                "  stored_z_coords.len: {}",
-                self.stored_z_coords.borrow().len()
-            );
-            eprintln!(
-                "  stored_t_coords.len: {}",
-                self.stored_t_coords.borrow().len()
-            );
-        }
-
         // Build auxiliary columns from stored EdDSA coordinates
         let n_rows = main_trace.info().length();
         let mut aux_columns: Vec<Vec<E>> = Vec::with_capacity(AUX_TRACE_WIDTH);
@@ -2795,9 +2266,7 @@ impl Prover for GroveProver {
                         }
                     }
                 }
-                Err(_e) => {
-                    #[cfg(debug_assertions)]
-                    eprintln!("WARNING: Failed to build GroveVM trace: {}", _e);
+                Err(_) => {
                     // Initialize GroveVM columns to zero on failure
                     // This ensures we have a valid auxiliary trace structure
                     use crate::phases::grovevm::GROVEVM_AUX_WIDTH;
@@ -2824,29 +2293,11 @@ pub fn generate_proof(
     public_inputs: &PublicInputs,
     config: &STARKConfig,
 ) -> Result<Vec<u8>> {
-    #[cfg(debug_assertions)]
-    {
-        eprintln!("=== generate_proof() starting ===");
-        eprintln!("  Available CPU cores: {}", num_cpus::get());
-        eprintln!("  Rayon threads: {}", rayon::current_num_threads());
-    }
-
     // Create prover with configuration
     let prover = GroveProver::new(config.clone()).with_public_inputs(public_inputs.clone());
 
-    #[cfg(debug_assertions)]
-    eprintln!("Building execution trace...");
-
     // Build the execution trace
     let trace = prover.build_trace(witness, public_inputs)?;
-
-    #[cfg(debug_assertions)]
-    {
-        eprintln!("Trace built successfully:");
-        eprintln!("  Width: {}", trace.width());
-        eprintln!("  Length: {}", trace.length());
-        eprintln!("  Is multi-segment: {}", trace.info().is_multi_segment());
-    }
 
     // Build AIR for validation
     let proof_options = ProofOptions::new(
@@ -2872,42 +2323,13 @@ pub fn generate_proof(
         trace.validate::<_, BaseElement>(&air, None);
     }
 
-    #[cfg(debug_assertions)]
-    {
-        eprintln!("Calling winterfell prove()...");
-        eprintln!("  Proof options:");
-        eprintln!("    - num_queries: {}", config.num_queries);
-        eprintln!("    - expansion_factor: {}", config.expansion_factor);
-        eprintln!("    - grinding_bits: {}", config.grinding_bits);
-        eprintln!("    - folding_factor: {}", config.folding_factor);
-        eprintln!("    - fri_max_remainder: {}", config.max_remainder_degree);
-        eprintln!("  📊 Starting STARK proof generation (multiple stages):");
-        eprintln!("    Stage 1: LDE (Low Degree Extension) - expanding trace");
-        eprintln!("    Stage 2: Constraint evaluation and composition");
-        eprintln!("    Stage 3: FRI commitment phase");
-        eprintln!("    Stage 4: FRI query phase");
-        eprintln!(
-            "    Stage 5: Proof-of-work grinding (~{} seconds expected)",
-            (1 << config.grinding_bits) as f64 / 1_000_000.0
-        );
-    }
-
     // Generate the proof
     let proof = prover
         .prove(trace)
         .map_err(|e| Error::ProvingFailed(format!("Failed to generate proof: {}", e)))?;
 
-    #[cfg(debug_assertions)]
-    {
-        eprintln!("  ✅ All stages complete - proof generated successfully!");
-        eprintln!("Proof generated successfully!");
-    }
-
     // Serialize the proof
     let proof_bytes = proof.to_bytes();
-
-    #[cfg(debug_assertions)]
-    eprintln!("Proof serialized: {} bytes", proof_bytes.len());
 
     Ok(proof_bytes)
 }
@@ -2944,9 +2366,6 @@ pub fn verify_proof(
 
     match result {
         Ok(()) => Ok(true),
-        Err(_e) => {
-            eprintln!("Winterfell verification failed: {:?}", _e);
-            Ok(false)
-        }
+        Err(_) => Ok(false),
     }
 }

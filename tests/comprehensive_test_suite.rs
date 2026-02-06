@@ -5,10 +5,9 @@
 
 use grovestark::crypto::ed25519::decompress::augment_witness_with_extended;
 use grovestark::crypto::Blake3Hasher;
-use grovestark::error_handling::{
-    CircuitBreaker, CircuitBreakerConfig, RetryConfig, RetryExecutor,
-};
 use grovestark::phases::eddsa::witness_augmentation::augment_eddsa_witness;
+use grovestark::resilience::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
+use grovestark::resilience::retry::{RetryExecutor, RetryPolicy};
 use grovestark::{GroveSTARK, MerkleNode, PrivateInputs, PublicInputs, STARKConfig, STARKProof};
 use std::time::{Duration, Instant};
 
@@ -261,17 +260,17 @@ fn test_error_handling_with_retry() {
     let counter = Arc::new(AtomicUsize::new(0));
     let counter_clone = counter.clone();
 
-    let config = RetryConfig {
+    let policy = RetryPolicy {
         max_attempts: 3,
-        initial_backoff: Duration::from_millis(1),
-        max_backoff: Duration::from_secs(1),
+        initial_delay: Duration::from_millis(1),
+        max_delay: Duration::from_secs(1),
         backoff_multiplier: 2.0,
         jitter_factor: 0.0,
     };
 
-    let executor = RetryExecutor::new(config);
+    let executor = RetryExecutor::new(policy);
 
-    let result = executor.execute(move || {
+    let result = executor.execute_sync(move || {
         let count = counter_clone.fetch_add(1, Ordering::SeqCst);
         if count < 2 {
             Err(grovestark::error::Error::NetworkError(
@@ -291,25 +290,29 @@ fn test_error_handling_with_retry() {
 fn test_circuit_breaker() {
     let config = CircuitBreakerConfig {
         failure_threshold: 2,
-        reset_timeout: Duration::from_millis(50),
         success_threshold: 1,
+        failure_window: Duration::from_secs(60),
+        recovery_timeout: Duration::from_millis(50),
+        half_open_max_requests: 3,
     };
 
-    let breaker = CircuitBreaker::new(config);
+    let breaker = CircuitBreaker::new("test".to_string(), config);
 
     // Cause failures to open circuit
-    let _ = breaker.call(|| Err::<(), _>(grovestark::error::Error::NetworkError("Error".into())));
-    let _ = breaker.call(|| Err::<(), _>(grovestark::error::Error::NetworkError("Error".into())));
+    let _ =
+        breaker.execute(|| Err::<(), _>(grovestark::error::Error::NetworkError("Error".into())));
+    let _ =
+        breaker.execute(|| Err::<(), _>(grovestark::error::Error::NetworkError("Error".into())));
 
     // Circuit should be open
-    let result = breaker.call(|| Ok(42));
+    let result = breaker.execute(|| Ok(42));
     assert!(result.is_err());
 
-    // Wait for reset
+    // Wait for recovery
     std::thread::sleep(Duration::from_millis(100));
 
-    // Should work now
-    let result = breaker.call(|| Ok(42));
+    // Should work now (half-open allows requests)
+    let result = breaker.execute(|| Ok(42));
     assert!(result.is_ok());
 }
 

@@ -267,60 +267,37 @@ impl Blake3Constraints {
     }
 }
 
-/// Helper to convert bytes to field elements for BLAKE3
-pub fn bytes_to_blake3_state(data: &[u8]) -> Vec<FieldElement> {
-    let mut elements = Vec::new();
-
-    // Process in 4-byte words (BLAKE3 uses 32-bit words)
-    for chunk in data.chunks(4) {
-        let mut bytes = [0u8; 4];
-        bytes[..chunk.len()].copy_from_slice(chunk);
-        elements.push(FieldElement::new(u32::from_le_bytes(bytes) as u64));
-    }
-
-    // Pad to 16 words if needed
-    while elements.len() < 16 {
-        elements.push(FieldElement::ZERO);
-    }
-
-    elements
-}
-
-/// Complete BLAKE3 hash computation in field elements
-pub fn blake3_hash_field(data: &[u8]) -> [FieldElement; 8] {
-    let mut state = Blake3State::new();
-    let mut output = [FieldElement::ZERO; 8];
-
-    // Process each 64-byte block
-    for chunk in data.chunks(64) {
-        state.load_block(chunk);
-        state.counter = state.counter + FieldElement::ONE;
-
-        if chunk.len() < 64 {
-            state.block_len = FieldElement::new(chunk.len() as u64);
-            state.flags = FieldElement::new(0x01); // CHUNK_END flag
-        }
-
-        let compressed = state.compress();
-
-        // Extract output (first 8 words)
-        for i in 0..8 {
-            output[i] = state.xor_field(
-                state.xor_field(compressed[i], compressed[i + 8]),
-                state.cv[i],
-            );
-        }
-
-        // Update chain value for next block
-        state.cv[..8].copy_from_slice(&output[..8]);
-    }
-
-    output
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn blake3_hash_field(data: &[u8]) -> [FieldElement; 8] {
+        let mut state = Blake3State::new();
+        let mut output = [FieldElement::ZERO; 8];
+
+        for chunk in data.chunks(64) {
+            state.load_block(chunk);
+            state.counter = state.counter + FieldElement::ONE;
+
+            if chunk.len() < 64 {
+                state.block_len = FieldElement::new(chunk.len() as u64);
+                state.flags = FieldElement::new(0x01);
+            }
+
+            let compressed = state.compress();
+
+            for i in 0..8 {
+                output[i] = state.xor_field(
+                    state.xor_field(compressed[i], compressed[i + 8]),
+                    state.cv[i],
+                );
+            }
+
+            state.cv[..8].copy_from_slice(&output[..8]);
+        }
+
+        output
+    }
 
     #[test]
     fn test_blake3_state_init() {

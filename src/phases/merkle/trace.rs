@@ -30,13 +30,14 @@ const MERKLE_HASH_ROWS: usize = 448;
 const MAX_PATH_DEPTH: usize = 32;
 
 /// Storage columns for extracted values (for join constraints)
-/// These are stored in the auxiliary trace columns
-/// We have 72 main + 96 aux = 168 total columns
-/// We'll use the upper auxiliary columns for storage
-const OWNER_ID_STORAGE_START: usize = 72; // First aux column (store 4x8 bytes)
-const IDENTITY_ID_STORAGE_START: usize = 76; // After owner_id (4 columns)
-const KEYS_ROOT_STORAGE_START: usize = 80; // After identity_id (4 columns)
-const PUBKEY_STORAGE_START: usize = 84; // After keys_root (4 columns)
+/// Relocated to COMMIT_SEL_COLS / GW_COMMIT_SEL_COLS region (116-131) to avoid
+/// overlap with OWNER_ID_COLS (72-79) and IDENTITY_ID_COLS (80-87).
+/// These selector columns are only written during BLAKE3 phase rows (0-3583),
+/// never during Merkle phase rows (3584-19967), so no phase overlap.
+const OWNER_ID_STORAGE_START: usize = 116; // cols 116-119
+const IDENTITY_ID_STORAGE_START: usize = 120; // cols 120-123
+const KEYS_ROOT_STORAGE_START: usize = 124; // cols 124-127
+const PUBKEY_STORAGE_START: usize = 128; // cols 128-131
 
 /// Fill the Merkle verification phase with 4 sequential paths (default)
 pub fn fill_merkle_phase(
@@ -171,6 +172,18 @@ fn process_merkle_path(
         let parent_hash = compute_merkle_parent(&current_hash, node, trace, *row)?;
         current_hash = parent_hash;
         *row += MERKLE_HASH_ROWS;
+
+        // Clear committed selectors at the boundary K7 row so C6/C7 skip it.
+        // The next compression init (or padding) overwrites nxt[V] at this row.
+        let boundary_k7 = *row - 1;
+        for t in 0..8 {
+            trace[COMMIT_K_SEL_COLS[t]][boundary_k7] = BaseElement::ZERO;
+            trace[COMMIT_STEP_SEL_COLS[t]][boundary_k7] = BaseElement::ZERO;
+        }
+        for j in 0..16 {
+            trace[COMMIT_SEL_COLS[j]][boundary_k7] = BaseElement::ZERO;
+        }
+
         if *row >= trace[0].len() {
             return Err(Error::InvalidInput("Trace overflow in Merkle phase".into()));
         }
